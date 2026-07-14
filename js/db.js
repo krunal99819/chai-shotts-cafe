@@ -320,12 +320,14 @@ export const db = {
                 return active || null;
             }
         },
-        async create(tableNumber, customerName, customerPhone = "") {
+        async create(tableNumber, customerName, customerPhone = "", locationLabel = "", orderZone = "table") {
             tableNumber = parseInt(tableNumber);
             const newSession = {
                 tableNumber,
                 customerName,
                 customerPhone,
+                locationLabel: locationLabel || "Table " + tableNumber,
+                orderZone,
                 status: "open",
                 createdAt: Date.now(),
                 closedAt: null,
@@ -385,12 +387,13 @@ export const db = {
                 callback(JSON.parse(localStorage.getItem('cs_requests') || '[]'));
             }
         },
-        async add(tableNumber, type) {
+        async add(tableNumber, type, locationLabel = "") {
             tableNumber = parseInt(tableNumber);
             const request = {
                 tableNumber,
                 type, // 'waiter', 'bill_digital', 'bill_printed'
                 status: 'pending',
+                locationLabel: locationLabel || "Table " + tableNumber,
                 createdAt: Date.now()
             };
 

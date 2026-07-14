@@ -50,6 +50,13 @@ const elements = {
     custTableInput: document.getElementById('custTableInput'),
     custPhoneInput: document.getElementById('custPhoneInput'),
     tableInputGroup: document.getElementById('tableInputGroup'),
+    orderZoneSelect: document.getElementById('orderZoneSelect'),
+    hotelInputGroup: document.getElementById('hotelInputGroup'),
+    hotelSelect: document.getElementById('hotelSelect'),
+    hotelRoomInput: document.getElementById('hotelRoomInput'),
+    shopInputGroup: document.getElementById('shopInputGroup'),
+    shopSelect: document.getElementById('shopSelect'),
+    shopSpotInput: document.getElementById('shopSpotInput'),
     
     waiterConfirmModal: document.getElementById('waiterConfirmModal'),
     btnCallWaiter: document.getElementById('btnCallWaiter'),
@@ -102,6 +109,8 @@ async function initApp() {
         // Prefill and hide table input
         elements.custTableInput.value = tableNumber;
         elements.tableInputGroup.style.display = 'none';
+        elements.orderZoneSelect.value = 'table';
+        elements.orderZoneSelect.disabled = true; // Lock zone to inside table
         
         // 2. Check for active session
         await checkActiveSession();
@@ -122,6 +131,14 @@ async function initApp() {
 function setupEventListeners() {
     // Session Registration
     elements.btnStartSession.addEventListener('click', handleCreateSession);
+
+    // Toggle dynamic fields in registration modal
+    elements.orderZoneSelect.addEventListener('change', (e) => {
+        const zone = e.target.value;
+        elements.tableInputGroup.style.display = zone === 'table' ? 'block' : 'none';
+        elements.hotelInputGroup.style.display = zone === 'hotel' ? 'block' : 'none';
+        elements.shopInputGroup.style.display = zone === 'shop' ? 'block' : 'none';
+    });
 
     // Search and Filters
     elements.menuSearch.addEventListener('input', (e) => {
@@ -164,7 +181,7 @@ function setupEventListeners() {
     });
     elements.btnPayCounter.addEventListener('click', () => {
         elements.paymentModal.classList.remove('open');
-        alert("Please visit the billing counter. Tell them you are from Table " + tableNumber);
+        alert("Please visit the billing counter. Tell them you are from " + (activeSession?.locationLabel || "your table"));
     });
     elements.btnSimulatePaySuccess.addEventListener('click', handleSimulatedPayment);
 
@@ -216,38 +233,74 @@ async function checkActiveSession() {
 async function handleCreateSession() {
     const name = elements.custNameInput.value.trim();
     const phone = elements.custPhoneInput.value.trim();
-    const tableVal = parseInt(elements.custTableInput.value);
+    const zone = elements.orderZoneSelect.value;
     
     if (!name) {
         alert("Please enter your name to start ordering.");
         return;
     }
 
-    if (!tableVal || tableVal < 1 || tableVal > 9) {
-        alert("Please enter a valid Table Number between 1 and 9.");
-        return;
+    let localTableNum = 0;
+    let locationLabel = "";
+
+    if (zone === 'table') {
+        const tableVal = parseInt(elements.custTableInput.value);
+        if (!tableVal || tableVal < 1 || tableVal > 9) {
+            alert("Please enter a valid Table Number between 1 and 9.");
+            return;
+        }
+        localTableNum = tableVal;
+        locationLabel = `Table ${localTableNum}`;
+    } else if (zone === 'hotel') {
+        const hotel = elements.hotelSelect.value;
+        const room = elements.hotelRoomInput.value.trim();
+        if (!room) {
+            alert("Please enter your Hotel Room Number.");
+            return;
+        }
+        localTableNum = 10; // Virtual table ID for Hotel Partner
+        locationLabel = `${room} (${hotel})`;
+    } else if (zone === 'shop') {
+        const shop = elements.shopSelect.value;
+        const spot = elements.shopSpotInput.value.trim();
+        if (!spot) {
+            alert("Please enter your Seat/Spot location description.");
+            return;
+        }
+        localTableNum = 11; // Virtual table ID for Collaborating Shop
+        locationLabel = `${spot} (${shop})`;
+    } else if (zone === 'takeaway') {
+        localTableNum = 12; // Virtual table ID for Takeaways
+        locationLabel = "Takeaway / Self-Pickup";
     }
 
-    tableNumber = tableVal;
-    elements.tableIndicator.innerHTML = `<i class="fa-solid fa-chair"></i> Table ${tableNumber}`;
+    tableNumber = localTableNum;
+    elements.tableIndicator.innerHTML = `<i class="fa-solid fa-location-dot"></i> ${locationLabel}`;
 
     try {
-        // Check if there is already an active session for this table
-        const existingSession = await db.sessions.getActive(tableNumber);
+        // Check if there is already an active session for this exact location & customer name
+        const sessions = await new Promise(resolve => {
+            db.sessions.listen(allSess => {
+                resolve(allSess.filter(s => s.status === 'open'));
+            });
+        });
+        
+        const existingSession = sessions.find(s => s.tableNumber === localTableNum && s.customerName === name && (zone === 'table' ? true : s.customerPhone === phone));
+        
         if (existingSession) {
             activeSession = existingSession;
             elements.customerInfoModal.classList.remove('open');
             listenToSessionChanges(existingSession.id);
             syncRunningBill();
-            alert(`Welcome back, ${name}! Restoring your open session for Table ${tableNumber}.`);
+            alert(`Welcome back, ${name}! Rejoining your active session for ${locationLabel}.`);
             return;
         }
 
-        const session = await db.sessions.create(tableNumber, name, phone);
+        const session = await db.sessions.create(localTableNum, name, phone, locationLabel, zone);
         activeSession = session;
         elements.customerInfoModal.classList.remove('open');
         listenToSessionChanges(session.id);
-        alert(`Welcome, ${name}! Your ordering session is active at Table ${tableNumber}.`);
+        alert(`Welcome, ${name}! Your ordering session is active for ${locationLabel}.`);
     } catch (e) {
         console.error(e);
         alert("Failed to start session. Please try again.");
@@ -752,10 +805,11 @@ function setupOrderTracker(order) {
 
 async function handleWaiterCall() {
     try {
-        await db.requests.add(tableNumber, 'waiter');
+        const loc = activeSession?.locationLabel || ("Table " + tableNumber);
+        await db.requests.add(tableNumber, 'waiter', loc);
         soundEffects.playWaiter(); // chime call locally
         elements.waiterConfirmModal.classList.remove('open');
-        alert("Waiter requested! Staff will be at Table " + tableNumber + " shortly.");
+        alert("Assistance requested! Staff will be at " + loc + " shortly.");
     } catch (e) {
         console.error(e);
         alert("Failed to send waiter request. Please notify staff at counter.");
@@ -764,9 +818,10 @@ async function handleWaiterCall() {
 
 async function handlePrintedBillRequest() {
     try {
-        await db.requests.add(tableNumber, 'bill_printed');
+        const loc = activeSession?.locationLabel || ("Table " + tableNumber);
+        await db.requests.add(tableNumber, 'bill_printed', loc);
         elements.billOptionsModal.classList.remove('open');
-        alert("Printed bill requested. Staff is bringing the invoice to Table " + tableNumber);
+        alert("Printed bill requested. Staff is bringing the invoice to " + loc);
     } catch (e) {
         console.error(e);
         alert("Failed to send request.");
@@ -779,7 +834,8 @@ async function handlePrintedBillRequest() {
 
 async function handleDigitalBillRequest() {
     try {
-        await db.requests.add(tableNumber, 'bill_digital');
+        const loc = activeSession?.locationLabel || ("Table " + tableNumber);
+        await db.requests.add(tableNumber, 'bill_digital', loc);
         elements.billOptionsModal.classList.remove('open');
         
         // Fetch all orders placed in this session
@@ -838,7 +894,7 @@ function generateInvoicePDF(session, orders) {
     doc.setFont("Inter", "bold");
     doc.setFontSize(8);
     doc.setTextColor(12, 43, 32);
-    doc.text(`Table: ${session.tableNumber}`, margin, y);
+    doc.text(`Location: ${session.locationLabel || "Table " + session.tableNumber}`, margin, y);
     doc.text(`Date: ${new Date(session.createdAt).toLocaleDateString()}`, 80 - margin, y, { align: "right" });
     
     y += 4;
@@ -994,12 +1050,17 @@ async function handleSubmitFeedback() {
 
     try {
         // Save in requests list as a completed feedback action log
-        await db.requests.add(tableNumber, `feedback: Food ${foodRating}*, Service ${serviceRating}* - "${feedbackVal}"`);
+        const loc = activeSession?.locationLabel || ("Table " + tableNumber);
+        await db.requests.add(tableNumber, `feedback: Food ${foodRating}*, Service ${serviceRating}* - "${feedbackVal}"`, loc);
         elements.feedbackModal.classList.remove('open');
         alert("Thank you so much for your rating!");
         
         // Reload page to start fresh
-        window.location.search = `?table=${tableNumber}`;
+        if (activeSession && activeSession.orderZone === 'table') {
+            window.location.search = `?table=${tableNumber}`;
+        } else {
+            window.location.href = 'index.html';
+        }
     } catch (e) {
         console.error(e);
         alert("Failed to save feedback.");

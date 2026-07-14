@@ -35,6 +35,7 @@ const elements = {
     
     // POS Floor Map
     posTableGrid: document.getElementById('posTableGrid'),
+    externalSessionsGrid: document.getElementById('externalSessionsGrid'),
     
     // POS Checkout Drawer
     checkoutPanelEmpty: document.getElementById('checkoutPanelEmpty'),
@@ -227,7 +228,7 @@ function updateDashboardMetrics() {
     elements.mTotalOrders.innerText = activeOrders.length;
 
     // 3. Count Running Tables
-    const runningTables = allSessions.filter(s => s.status === 'open');
+    const runningTables = allSessions.filter(s => s.status === 'open' && s.tableNumber <= 9);
     elements.mActiveTables.innerText = `${runningTables.length} / 9`;
 
     // 4. Pending Requests
@@ -295,10 +296,71 @@ function renderFloorLayoutMap() {
                 selectedTable = tNum;
                 loadCheckoutDrawer(sess);
             } else {
-                alert(`Table ${tNum} is currently available. Scan Table QR or place order to initiate session.`);
+                alert(`Table ${tNum} is currently available.`);
             }
         });
     });
+
+    // Render External Sessions (Table Number >= 10: Hotel/Shop/Takeaway)
+    const externalSessList = allSessions.filter(s => s.status === 'open' && s.tableNumber >= 10);
+    
+    if (externalSessList.length === 0) {
+        elements.externalSessionsGrid.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: var(--color-text-muted); font-size: 0.85rem; border: 1.5px dashed var(--color-border); border-radius: var(--radius-md); width:100%;">
+                No active hotel rooms, shops or takeaways right now.
+            </div>
+        `;
+    } else {
+        let extHtml = "";
+        externalSessList.forEach(sess => {
+            const pendingReqs = allRequests.filter(r => r.tableNumber === sess.tableNumber && r.status === 'pending' && r.type.includes('bill'));
+            const hasWaiterCall = allRequests.some(r => r.tableNumber === sess.tableNumber && r.status === 'pending' && r.type === 'waiter');
+            const hasBillCall = pendingReqs.length > 0;
+            
+            let cardColor = "#28a745"; // Default green
+            let statusLabel = "Active Session";
+            
+            if (hasBillCall) {
+                cardColor = "#fd7e14"; // Orange
+                statusLabel = "Bill Requested";
+            } else {
+                cardColor = "#dc3545"; // Red
+            }
+
+            const callDot = hasWaiterCall ? `<div class="waiter-call-glowing-dot" style="top:10px; right:10px;"></div>` : "";
+
+            let locName = sess.locationLabel || "External";
+            if (locName.length > 20) locName = locName.slice(0, 18) + "..";
+
+            extHtml += `
+                <div class="table-node occupied" data-ext-session-id="${sess.id}" style="border-color:${cardColor}; text-align:left; padding: 12px; display:flex; flex-direction:column; justify-content:space-between; height:100px;">
+                    ${callDot}
+                    <div>
+                        <div style="font-weight:800; font-size:0.9rem; color:var(--color-primary-deep); margin-bottom:2px;">${locName}</div>
+                        <div style="font-size:0.7rem; color:var(--color-text-muted);">${sess.customerName}</div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed var(--color-border); padding-top:6px; margin-top:6px;">
+                        <span style="font-size:0.65rem; font-weight:700; color:${cardColor};">${statusLabel}</span>
+                        <span style="font-family:var(--font-heading); font-weight:700; font-size:0.85rem; color:var(--color-primary-deep);">₹${sess.totalAmount}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        elements.externalSessionsGrid.innerHTML = extHtml;
+
+        // Bind external session clicks to checkout drawer
+        elements.externalSessionsGrid.querySelectorAll('.table-node').forEach(card => {
+            card.addEventListener('click', (e) => {
+                const sId = e.currentTarget.dataset.extSessionId;
+                const sess = allSessions.find(s => s.id === sId && s.status === 'open');
+                if (sess) {
+                    selectedTable = sess.tableNumber;
+                    loadCheckoutDrawer(sess);
+                }
+            });
+        });
+    }
 }
 
 function loadCheckoutDrawer(session) {
@@ -306,7 +368,7 @@ function loadCheckoutDrawer(session) {
     elements.checkoutPanelEmpty.style.display = 'none';
     elements.checkoutPanelActive.style.display = 'block';
     
-    elements.checkoutTableHeader.innerText = `Table #${session.tableNumber} Session`;
+    elements.checkoutTableHeader.innerText = `${session.locationLabel || "Table #" + session.tableNumber} Session`;
     elements.checkoutCustomerHeader.innerText = `Customer: ${session.customerName} | Phone: ${session.customerPhone || "N/A"}`;
     
     // Check if table has requested bill
@@ -426,7 +488,7 @@ function reprintPOSInvoice(session, orders) {
 
     y += 6;
     doc.setFont("Inter", "bold");
-    doc.text(`Table: ${session.tableNumber} [DUPLICATE]`, margin, y);
+    doc.text(`Location: ${session.locationLabel || "Table " + session.tableNumber} [DUPLICATE]`, margin, y);
     doc.text(`Date: ${new Date(session.createdAt).toLocaleDateString()}`, 80 - margin, y, { align: "right" });
     
     y += 4;
@@ -569,10 +631,14 @@ function renderLiveOrdersQueue() {
             `;
         }
 
+        // Retrieve dynamic location text from the session
+        const sess = allSessions.find(s => s.id === order.sessionId);
+        const locationText = sess ? (sess.locationLabel || `Table ${order.tableNumber}`) : `Table ${order.tableNumber}`;
+
         html += `
             <div class="admin-order-card">
                 <div class="admin-order-card-header">
-                    <span style="font-weight:700; color:var(--color-primary-deep)">TABLE ${order.tableNumber}</span>
+                    <span style="font-weight:700; color:var(--color-primary-deep)">${locationText.toUpperCase()}</span>
                     ${statusBadge}
                 </div>
                 <div class="admin-order-card-body">
@@ -645,11 +711,12 @@ function renderRequestsQueue() {
         if (req.type === 'bill_digital') detailsText = "Downloaded digital PDF. Needs UPI verification / cashier approval.";
         if (req.type.startsWith('feedback:')) detailsText = req.type.replace('feedback:', '');
 
+        const locationText = req.locationLabel || `Table ${req.tableNumber}`;
         html += `
             <div class="request-card pending">
                 <div>
                     <div class="request-card-header">
-                        <span>TABLE ${req.tableNumber}</span>
+                        <span>${locationText.toUpperCase()}</span>
                         <span class="request-time">${getTimeAgoString(req.createdAt)}</span>
                     </div>
                     <div style="margin-bottom:12px;">
