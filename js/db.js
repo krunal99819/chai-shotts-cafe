@@ -76,19 +76,19 @@ const mockDB = {
     setupStorageListeners() {
         window.addEventListener('storage', (e) => {
             if (e.key === 'cs_categories' && e.newValue) {
-                this.trigger('categories', JSON.parse(e.newValue));
+                mockDB.trigger('categories', JSON.parse(e.newValue));
             }
             if (e.key === 'cs_products' && e.newValue) {
-                this.trigger('products', JSON.parse(e.newValue));
+                mockDB.trigger('products', JSON.parse(e.newValue));
             }
             if (e.key === 'cs_orders' && e.newValue) {
-                this.trigger('orders', JSON.parse(e.newValue));
+                mockDB.trigger('orders', JSON.parse(e.newValue));
             }
             if (e.key === 'cs_sessions' && e.newValue) {
-                this.trigger('sessions', JSON.parse(e.newValue));
+                mockDB.trigger('sessions', JSON.parse(e.newValue));
             }
             if (e.key === 'cs_requests' && e.newValue) {
-                this.trigger('requests', JSON.parse(e.newValue));
+                mockDB.trigger('requests', JSON.parse(e.newValue));
             }
         });
     }
