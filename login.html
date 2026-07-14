@@ -133,15 +133,9 @@
         </form>
 
         <!-- Easy Quick Login shortcuts for testing/simulation -->
-        <div class="shortcut-grid">
-            <button class="shortcut-btn" data-email="admin@chaishotts.com" data-pass="admin">
-                <i class="fa-solid fa-user-shield"></i> Admin
-            </button>
-            <button class="shortcut-btn" data-email="cashier@chaishotts.com" data-pass="cashier">
-                <i class="fa-solid fa-cash-register"></i> Cashier
-            </button>
-            <button class="shortcut-btn" data-email="kitchen@chaishotts.com" data-pass="kitchen">
-                <i class="fa-solid fa-fire-burner"></i> Kitchen
+        <div class="shortcut-grid" style="grid-template-columns: 1fr;">
+            <button class="shortcut-btn" data-email="admin@chaishotts.com" data-pass="admin" style="padding: 12px;">
+                <i class="fa-solid fa-user-shield"></i> Quick Login as Admin
             </button>
         </div>
     </div>
@@ -184,12 +178,10 @@
         });
 
         function handleRedirect(role) {
-            if (role === 'admin' || role === 'cashier' || role === 'manager') {
+            if (role === 'admin') {
                 window.location.href = 'admin.html';
-            } else if (role === 'kitchen') {
-                window.location.href = 'kds.html';
             } else {
-                alert("Role not recognized.");
+                alert("Access Denied: Only Admin accounts can log in.");
             }
         }
 

@@ -78,14 +78,14 @@ const elements = {
 document.addEventListener('DOMContentLoaded', () => {
     // Authenticate Role
     db.auth.listenState(user => {
-        if (!user || (user.role !== 'admin' && user.role !== 'cashier' && user.role !== 'manager')) {
+        if (!user || user.role !== 'admin') {
             alert("Access denied. Directing to login.");
             window.location.href = 'login.html';
             return;
         }
 
-        elements.adminStaffName.innerText = user.name || "Staff User";
-        elements.adminStaffRole.innerText = user.role.toUpperCase() + " Panel";
+        elements.adminStaffName.innerText = user.name || "Admin User";
+        elements.adminStaffRole.innerText = "POS Admin Panel";
         
         initAdminPanel();
     });
