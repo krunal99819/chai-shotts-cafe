@@ -223,8 +223,8 @@ async function handleCreateSession() {
         return;
     }
 
-    if (!tableVal || tableVal < 1 || tableVal > 30) {
-        alert("Please enter a valid Table Number between 1 and 30.");
+    if (!tableVal || tableVal < 1 || tableVal > 9) {
+        alert("Please enter a valid Table Number between 1 and 9.");
         return;
     }
 

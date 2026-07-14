@@ -228,7 +228,7 @@ function updateDashboardMetrics() {
 
     // 3. Count Running Tables
     const runningTables = allSessions.filter(s => s.status === 'open');
-    elements.mActiveTables.innerText = `${runningTables.length} / 30`;
+    elements.mActiveTables.innerText = `${runningTables.length} / 9`;
 
     // 4. Pending Requests
     const pendingReqs = allRequests.filter(r => r.status === 'pending');
@@ -249,8 +249,8 @@ function updateDashboardMetrics() {
 function renderFloorLayoutMap() {
     let html = "";
     
-    // Generate Table map nodes for Table 1 to 30
-    for (let tNum = 1; tNum <= 30; tNum++) {
+    // Generate Table map nodes for Table 1 to 9
+    for (let tNum = 1; tNum <= 9; tNum++) {
         const activeSess = allSessions.find(s => s.tableNumber === tNum && s.status === 'open');
         const pendingReqs = allRequests.filter(r => r.tableNumber === tNum && r.status === 'pending');
         const hasWaiterCall = pendingReqs.some(r => r.type === 'waiter');
@@ -985,32 +985,20 @@ function renderAnalyticsCharts() {
 function generateTableQRSheets() {
     const hostUrl = elements.qrHostUrl.value.trim();
     
-    // 1. Add Master Unified QR Code Card (Grid header item)
+    // 1. Render Master Unified QR Card only
     let html = `
-        <div class="qr-card-print" style="border-color:var(--color-accent-gold); box-shadow:0 0 15px rgba(223,168,86,0.3); grid-column: 1 / -1; max-width:280px; margin: 0 auto 20px auto;">
-            <h4>CHAI SHOTTS</h4>
-            <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--color-accent-gold-dark);">MASTER UNIFIED QR</div>
-            <div class="qr-card-print-img">
+        <div class="qr-card-print" style="border-color:var(--color-accent-gold); box-shadow:0 0 15px rgba(223,168,86,0.3); grid-column: 1 / -1; max-width:320px; margin: 40px auto; padding: 24px;">
+            <h3 style="font-family:var(--font-heading); font-weight:800; font-size:1.4rem; color:var(--color-primary-deep);">CHAI SHOTTS</h3>
+            <div style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:var(--color-accent-gold-dark); letter-spacing:0.5px; margin-top:2px;">Master QR Menu</div>
+            <div class="qr-card-print-img" style="margin:20px auto; width:150px; height:150px; display:flex; justify-content:center; align-items:center;">
                 <canvas id="qrCanvasMaster"></canvas>
             </div>
-            <div style="font-family:var(--font-heading); font-weight:800; font-size:1.15rem; color:var(--color-primary-deep)">ALL TABLES QR</div>
-            <div style="font-size:0.7rem; color:var(--color-text-muted); margin-top:2px;">Prompts customer for Table No.</div>
+            <div style="font-family:var(--font-heading); font-weight:800; font-size:1.15rem; color:var(--color-primary-deep)">SCAN TO ORDER DIRECTLY</div>
+            <div style="font-size:0.75rem; color:var(--color-text-muted); margin-top:4px; line-height:1.4;">
+                Select your table number and enter your name to start ordering!
+            </div>
         </div>
     `;
-    
-    // Generate cards for tables 1 to 30
-    for (let tNum = 1; tNum <= 30; tNum++) {
-        html += `
-            <div class="qr-card-print">
-                <h4>CHAI SHOTTS</h4>
-                <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--color-accent-gold-dark);">Scan to Order</div>
-                <div class="qr-card-print-img">
-                    <canvas id="qrCanvasTable_${tNum}"></canvas>
-                </div>
-                <div style="font-family:var(--font-heading); font-weight:800; font-size:1.2rem;">TABLE ${tNum}</div>
-            </div>
-        `;
-    }
     
     elements.qrPrintGrid.innerHTML = html;
 
@@ -1020,25 +1008,10 @@ function generateTableQRSheets() {
         new QRious({
             element: masterCanvas,
             value: `${hostUrl}/index.html`,
-            size: 130,
+            size: 150,
             background: '#ffffff',
-            foreground: '#dfa856', // Gold QR code for Master Card
+            foreground: '#0c2b20',
             level: 'H'
         });
-    }
-
-    // Draw the QR codes on the canvases for Tables 1 to 30
-    for (let tNum = 1; tNum <= 30; tNum++) {
-        const canvas = document.getElementById(`qrCanvasTable_${tNum}`);
-        if (canvas) {
-            new QRious({
-                element: canvas,
-                value: `${hostUrl}/index.html?table=${tNum}`,
-                size: 130,
-                background: '#ffffff',
-                foreground: '#0c2b20',
-                level: 'H'
-            });
-        }
     }
 }
