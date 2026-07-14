@@ -301,13 +301,13 @@ function renderFloorLayoutMap() {
         });
     });
 
-    // Render External Sessions (Table Number >= 10: Hotel/Shop/Takeaway)
+    // Render External Sessions (Table Number >= 10: Hotel Partner)
     const externalSessList = allSessions.filter(s => s.status === 'open' && s.tableNumber >= 10);
     
     if (externalSessList.length === 0) {
         elements.externalSessionsGrid.innerHTML = `
             <div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: var(--color-text-muted); font-size: 0.85rem; border: 1.5px dashed var(--color-border); border-radius: var(--radius-md); width:100%;">
-                No active hotel rooms, shops or takeaways right now.
+                No active Hotel Relax Inn deliveries right now.
             </div>
         `;
     } else {

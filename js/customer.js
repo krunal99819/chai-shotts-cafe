@@ -52,11 +52,7 @@ const elements = {
     tableInputGroup: document.getElementById('tableInputGroup'),
     orderZoneSelect: document.getElementById('orderZoneSelect'),
     hotelInputGroup: document.getElementById('hotelInputGroup'),
-    hotelSelect: document.getElementById('hotelSelect'),
     hotelRoomInput: document.getElementById('hotelRoomInput'),
-    shopInputGroup: document.getElementById('shopInputGroup'),
-    shopSelect: document.getElementById('shopSelect'),
-    shopSpotInput: document.getElementById('shopSpotInput'),
     
     waiterConfirmModal: document.getElementById('waiterConfirmModal'),
     btnCallWaiter: document.getElementById('btnCallWaiter'),
@@ -137,7 +133,6 @@ function setupEventListeners() {
         const zone = e.target.value;
         elements.tableInputGroup.style.display = zone === 'table' ? 'block' : 'none';
         elements.hotelInputGroup.style.display = zone === 'hotel' ? 'block' : 'none';
-        elements.shopInputGroup.style.display = zone === 'shop' ? 'block' : 'none';
     });
 
     // Search and Filters
@@ -252,26 +247,13 @@ async function handleCreateSession() {
         localTableNum = tableVal;
         locationLabel = `Table ${localTableNum}`;
     } else if (zone === 'hotel') {
-        const hotel = elements.hotelSelect.value;
         const room = elements.hotelRoomInput.value.trim();
         if (!room) {
-            alert("Please enter your Hotel Room Number.");
+            alert("Please enter your Room Number.");
             return;
         }
         localTableNum = 10; // Virtual table ID for Hotel Partner
-        locationLabel = `${room} (${hotel})`;
-    } else if (zone === 'shop') {
-        const shop = elements.shopSelect.value;
-        const spot = elements.shopSpotInput.value.trim();
-        if (!spot) {
-            alert("Please enter your Seat/Spot location description.");
-            return;
-        }
-        localTableNum = 11; // Virtual table ID for Collaborating Shop
-        locationLabel = `${spot} (${shop})`;
-    } else if (zone === 'takeaway') {
-        localTableNum = 12; // Virtual table ID for Takeaways
-        locationLabel = "Takeaway / Self-Pickup";
+        locationLabel = `${room} (HOTEL RELAX INN)`;
     }
 
     tableNumber = localTableNum;
