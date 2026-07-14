@@ -1,0 +1,61 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if user is logged in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Check if user has staff/admin role
+    // This assumes staff profiles are stored in /users/{userId}
+    function isStaff() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'kitchen', 'cashier']);
+    }
+
+    // Categories and Products
+    match /categories/{catId} {
+      allow read: if true; // Publicly readable for customer menu
+      allow write: if isStaff(); // Editable only by staff
+    }
+
+    match /products/{prodId} {
+      allow read: if true; // Publicly readable for customer menu
+      allow write: if isStaff(); // Editable only by staff
+    }
+
+    // Orders (Kitchen tickets)
+    match /orders/{orderId} {
+      allow read: if true; // Customers can track their own orders (we can filter by sessionId)
+      allow create: if true; // Anyone can place an order
+      allow update, delete: if isStaff(); // Only staff can change status (cooking, served) or delete
+    }
+
+    // Sessions (Open table bills)
+    match /sessions/{sessionId} {
+      allow read: if true; // Customers can view their running bill
+      allow create: if true; // Customer places first order
+      allow update: if true; // Customer adds items (updates order list & total)
+      allow delete: if isStaff();
+      
+      // Closing a session (marking paid) should ideally be restricted to cashier,
+      // but in serverless UPI payment simulation we allow client updates.
+      // In production, cashiers close sessions on cash/card.
+    }
+
+    // Service Requests (Waiter calls & Bill requests)
+    match /requests/{requestId} {
+      allow read: if true; // Customers can read, staff can read
+      allow create: if true; // Anyone can call waiter
+      allow update, delete: if isStaff(); // Resolving requests restricted to staff
+    }
+
+    // User accounts (Staff metadata)
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId; // Allow staff setup
+    }
+  }
+}

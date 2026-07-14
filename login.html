@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Login | Chai Shotts POS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            background-color: var(--color-primary-deep);
+            background-image: radial-gradient(circle at center, var(--color-primary-mid) 0%, var(--color-primary-deep) 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            color: var(--color-bg-cream);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .login-logo {
+            width: 60px;
+            height: 60px;
+            background-color: var(--color-accent-gold);
+            color: var(--color-primary-deep);
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 12px;
+            box-shadow: 0 0 20px rgba(223, 168, 86, 0.3);
+        }
+
+        .login-header h2 {
+            color: var(--color-bg-cream);
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .login-header p {
+            font-size: 0.85rem;
+            color: var(--color-accent-gold);
+        }
+
+        .form-group label {
+            color: var(--color-accent-gold);
+            font-weight: 500;
+        }
+
+        .form-group input {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: var(--transition-fast);
+        }
+
+        .form-group input:focus {
+            background-color: rgba(255, 255, 255, 0.08);
+            border-color: var(--color-accent-gold);
+            box-shadow: 0 0 0 3px rgba(223, 168, 86, 0.15);
+        }
+
+        .shortcut-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 18px;
+        }
+
+        .shortcut-btn {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--color-bg-cream);
+            padding: 8px 4px;
+            font-size: 0.75rem;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            text-align: center;
+            transition: var(--transition-fast);
+        }
+
+        .shortcut-btn:hover {
+            background-color: var(--color-accent-gold);
+            color: var(--color-primary-deep);
+            border-color: var(--color-accent-gold);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-card animate-scale-in">
+        <div class="login-header">
+            <div class="login-logo">CS</div>
+            <h2>Chai Shotts POS</h2>
+            <p>Staff Access Only</p>
+        </div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="loginEmail">Email Address</label>
+                <input type="email" id="loginEmail" placeholder="Enter email" required>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter password" required>
+            </div>
+
+            <button type="submit" id="btnLoginSubmit" class="btn-gold" style="width: 100%; padding: 14px;">
+                <i class="fa-solid fa-right-to-bracket"></i> Authenticate
+            </button>
+        </form>
+
+        <!-- Easy Quick Login shortcuts for testing/simulation -->
+        <div class="shortcut-grid">
+            <button class="shortcut-btn" data-email="admin@chaishotts.com" data-pass="admin">
+                <i class="fa-solid fa-user-shield"></i> Admin
+            </button>
+            <button class="shortcut-btn" data-email="cashier@chaishotts.com" data-pass="cashier">
+                <i class="fa-solid fa-cash-register"></i> Cashier
+            </button>
+            <button class="shortcut-btn" data-email="kitchen@chaishotts.com" data-pass="kitchen">
+                <i class="fa-solid fa-fire-burner"></i> Kitchen
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import db from './js/db.js';
+
+        const form = document.getElementById('loginForm');
+        const emailInput = document.getElementById('loginEmail');
+        const passwordInput = document.getElementById('loginPassword');
+        const submitBtn = document.getElementById('btnLoginSubmit');
+
+        // Form Submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
+
+            try {
+                const user = await db.auth.login(email, password);
+                handleRedirect(user.role);
+            } catch (err) {
+                alert(err.message || "Failed to log in.");
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Authenticate';
+            }
+        });
+
+        // Quick login buttons
+        document.querySelectorAll('.shortcut-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const target = e.currentTarget;
+                emailInput.value = target.dataset.email;
+                passwordInput.value = target.dataset.pass;
+                form.dispatchEvent(new Event('submit'));
+            });
+        });
+
+        function handleRedirect(role) {
+            if (role === 'admin' || role === 'cashier' || role === 'manager') {
+                window.location.href = 'admin.html';
+            } else if (role === 'kitchen') {
+                window.location.href = 'kds.html';
+            } else {
+                alert("Role not recognized.");
+            }
+        }
+
+        // Auto-redirect if already logged in
+        db.auth.listenState(user => {
+            if (user) {
+                handleRedirect(user.role);
+            }
+        });
+    </script>
+</body>
+</html>

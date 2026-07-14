@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chai Shotts Cafe | Smart QR Ordering</title>
+    
+    <!-- Meta Tags for SEO -->
+    <meta name="description" content="Order delicious gourmet chai, cold coffee, pizza, burgers, and snacks directly from your table at Chai Shotts Cafe. Fast, digital, and cashless.">
+    
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/customer.css">
+    
+    <!-- External Libraries via CDN -->
+    <!-- jsPDF for digital bill generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <!-- QRious for generating UPI QR codes dynamically -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+</head>
+<body>
+
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header class="customer-header">
+            <div class="header-top">
+                <div class="logo-container">
+                    <div class="logo-img">CS</div>
+                    <div class="cafe-title">
+                        <h1>Chai Shotts</h1>
+                        <p>Cafe & Conversation</p>
+                    </div>
+                </div>
+                <div id="tableIndicator" class="table-badge">
+                    <i class="fa-solid fa-chair"></i> Table --
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <button id="btnCallWaiter" class="header-btn">
+                    <i class="fa-solid fa-bell"></i> Call Waiter
+                </button>
+                <button id="btnRequestBill" class="header-btn">
+                    <i class="fa-solid fa-file-invoice-dollar"></i> Request Bill
+                </button>
+            </div>
+        </header>
+
+        <!-- Live Order Status Tracker (Hidden by default, shown if there are active orders) -->
+        <div id="liveOrderTracker" class="order-tracker-card" style="display: none;">
+            <div class="tracker-header">
+                <span class="tracker-title"><i class="fa-solid fa-spinner fa-spin"></i> Track Your Active Order</span>
+                <span id="trackerOrderId" style="font-size: 0.75rem; opacity: 0.8;">ID: #---</span>
+            </div>
+            <div class="tracker-steps">
+                <div id="stepReceived" class="step-node active">
+                    <div class="step-circle"><i class="fa-solid fa-receipt"></i></div>
+                    <div class="step-label">Received</div>
+                </div>
+                <div id="stepPreparing" class="step-node">
+                    <div class="step-circle"><i class="fa-solid fa-fire-burner"></i></div>
+                    <div class="step-label">Preparing</div>
+                </div>
+                <div id="stepReady" class="step-node">
+                    <div class="step-circle"><i class="fa-solid fa-bell-concierge"></i></div>
+                    <div class="step-label">Ready</div>
+                </div>
+                <div id="stepServed" class="step-node">
+                    <div class="step-circle"><i class="fa-solid fa-circle-check"></i></div>
+                    <div class="step-label">Served</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="search-container">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="menuSearch" placeholder="Search tea, burgers, maggi...">
+            </div>
+        </div>
+
+        <!-- Horizontal Category Pills -->
+        <div class="categories-wrapper">
+            <div id="categoriesList" class="categories-container">
+                <!-- Dynamically loaded pills -->
+            </div>
+        </div>
+
+        <!-- Menu Section (Grouped by Category) -->
+        <div id="menuContainer" class="menu-section">
+            <!-- Dynamically loaded product list -->
+        </div>
+
+        <!-- Floating Cart Bar -->
+        <div id="cartFloatingBar" class="cart-floating-bar" style="display: none;">
+            <div class="cart-summary">
+                <span id="cartItemsCount" class="cart-items-count">0 Items</span>
+                <span id="cartTotalPrice" class="cart-total-price">₹0</span>
+            </div>
+            <button id="btnViewCart" class="cart-view-btn">
+                View Cart <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Backdrop Overlay for Cart Drawer -->
+    <div id="drawerBackdrop" class="drawer-backdrop"></div>
+
+    <!-- Cart Drawer (Bottom Sheet) -->
+    <div id="cartDrawer" class="cart-drawer">
+        <div class="drawer-header">
+            <span class="drawer-title"><i class="fa-solid fa-basket-shopping"></i> Review Your Order</span>
+            <button id="drawerClose" class="drawer-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        
+        <div class="drawer-content">
+            <!-- Cart Items List -->
+            <div id="cartItemsList">
+                <!-- Cart rows loaded dynamically -->
+            </div>
+
+            <!-- Special Instructions -->
+            <div class="special-instruction-box">
+                <label for="orderNotes">Special Instructions</label>
+                <textarea id="orderNotes" placeholder="E.g., Make the chai less sweet, extra cheese, etc."></textarea>
+            </div>
+
+            <!-- Running Table Session Bill (If active) -->
+            <div id="runningBillSection" class="running-bill-box" style="display: none;">
+                <span class="running-bill-title">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Running Bill (Already Ordered)
+                </span>
+                <div id="runningBillList" class="running-bill-list">
+                    <!-- Previous orders in this session -->
+                </div>
+            </div>
+        </div>
+
+        <div class="drawer-footer">
+            <div class="bill-summary-row">
+                <span>Subtotal (New Items)</span>
+                <span id="drawerSubtotal">₹0</span>
+            </div>
+            <div class="bill-summary-row">
+                <span>CGST (2.5%) + SGST (2.5%)</span>
+                <span id="drawerTax">₹0</span>
+            </div>
+            <div id="runningBillMergeRow" class="bill-summary-row" style="display: none; color: var(--color-primary-deep); font-weight: 600;">
+                <span>Running Session Total</span>
+                <span id="runningSessionAmount">₹0</span>
+            </div>
+            <div class="bill-total-row">
+                <span>Grand Total (Combined)</span>
+                <span id="drawerGrandTotal">₹0</span>
+            </div>
+            <button id="btnPlaceOrder" class="btn-primary" style="width: 100%;">
+                <i class="fa-solid fa-circle-check"></i> Place Kitchen Order
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal 1: Table Selection (Demoware Fallback if no table in query string) -->
+    <div id="tableSelectModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 class="modal-title"><i class="fa-solid fa-mug-hot"></i> Welcome to Chai Shotts</h3>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center; margin-bottom: 16px;">
+                    Select a table number to simulate scanning a table QR code.
+                </p>
+                <div class="form-group">
+                    <label for="tableNumberSelect">Select Table Number</label>
+                    <select id="tableNumberSelect" class="form-group" style="width: 100%; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.9rem; background-color: var(--color-bg-pure);">
+                        <!-- Tables 1 to 30 -->
+                        <option value="1">Table 1 (Tea Zone)</option>
+                        <option value="2">Table 2</option>
+                        <option value="3">Table 3</option>
+                        <option value="4">Table 4</option>
+                        <option value="5">Table 5 (Corner Sofa)</option>
+                        <option value="6">Table 6</option>
+                        <option value="7">Table 7</option>
+                        <option value="8">Table 8</option>
+                        <option value="12">Table 12 (Premium Booth)</option>
+                        <option value="15">Table 15</option>
+                        <option value="20">Table 20</option>
+                        <option value="30">Table 30 (Family Lounge)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btnConfirmTable" class="btn-primary" style="width: 100%;">Proceed to Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Customer Registration Modal (Asked on first order if session does not exist) -->
+    <div id="customerInfoModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 class="modal-title"><i class="fa-solid fa-user-tag"></i> Start Your Session</h3>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center; margin-bottom: 16px;">
+                    Enter details to create an open table session for ordering.
+                </p>
+                <div class="form-group">
+                    <label for="custNameInput">Your Name *</label>
+                    <input type="text" id="custNameInput" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group">
+                    <label for="custPhoneInput">Mobile Number (Optional)</label>
+                    <input type="tel" id="custPhoneInput" placeholder="Enter 10-digit number">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btnStartSession" class="btn-primary" style="width: 100%;">Begin Ordering</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Call Waiter Confirmation -->
+    <div id="waiterConfirmModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 class="modal-title"><i class="fa-solid fa-bell"></i> Request Assistance</h3>
+            <div class="modal-body">
+                <p style="font-size: 0.9rem; text-align: center; color: var(--color-text-dark);">
+                    Do you want to call a waiter to your table?
+                </p>
+            </div>
+            <div class="modal-actions">
+                <button id="btnCancelWaiter" class="btn-secondary">Cancel</button>
+                <button id="btnConfirmWaiterCall" class="btn-primary">Call Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 4: Request Bill Options -->
+    <div id="billOptionsModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 class="modal-title"><i class="fa-solid fa-file-invoice-dollar"></i> Select Bill Type</h3>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center; margin-bottom: 16px;">
+                    How would you like to receive your bill?
+                </p>
+            </div>
+            <div class="modal-actions" style="flex-direction: column; gap: 10px;">
+                <button id="btnBillDigital" class="btn-primary" style="width: 100%;">
+                    <i class="fa-solid fa-file-pdf"></i> Digital Bill (PDF & Pay)
+                </button>
+                <button id="btnBillPrinted" class="btn-secondary" style="width: 100%;">
+                    <i class="fa-solid fa-print"></i> Printed Cashier Bill
+                </button>
+                <button id="btnCloseBillOptions" class="btn-secondary" style="width: 100%; border: none; font-weight: 500; font-size: 0.85rem;">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: Digital Payment (UPI QR Modal) -->
+    <div id="paymentModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 class="modal-title"><i class="fa-solid fa-mobile-screen-button"></i> Pay Securely via UPI</h3>
+            <div class="modal-body">
+                <div class="upi-qr-container">
+                    <div class="qr-canvas-holder">
+                        <canvas id="upiQrCanvas"></canvas>
+                    </div>
+                    <div class="upi-details-text">Scan with BHIM, GooglePay, PhonePe or Paytm</div>
+                    <div class="upi-amount-highlight" id="paymentAmount">₹0.00</div>
+                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--color-primary-deep);">
+                        Chai Shotts Cafe UPI
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions" style="flex-direction: column; gap: 10px;">
+                <button id="btnSimulatePaySuccess" class="btn-gold" style="width: 100%;">
+                    <i class="fa-solid fa-check-double"></i> Simulate Successful Payment
+                </button>
+                <button id="btnPayCounter" class="btn-secondary" style="width: 100%;">
+                    Pay at Counter
+                </button>
+                <button id="btnClosePayment" class="btn-secondary" style="width: 100%; border: none; font-weight: 500; font-size: 0.85rem;">
+                    Go Back
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 6: Feedback & Rating Modal (Shown after payment) -->
+    <div id="feedbackModal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 class="modal-title"><i class="fa-solid fa-heart"></i> Rate Your Experience</h3>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center; margin-bottom: 14px;">
+                    Thank you for dining with us! Let us know how we did.
+                </p>
+                <div class="form-group" style="text-align: center;">
+                    <label>Rate Food Quality</label>
+                    <div class="star-rating" style="display: flex; justify-content: center; gap: 8px; font-size: 1.8rem; color: #ccc; margin: 6px 0;">
+                        <i class="fa-solid fa-star star-btn" data-star="1" data-type="food"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="2" data-type="food"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="3" data-type="food"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="4" data-type="food"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="5" data-type="food"></i>
+                    </div>
+                </div>
+                <div class="form-group" style="text-align: center;">
+                    <label>Rate Service</label>
+                    <div class="star-rating" style="display: flex; justify-content: center; gap: 8px; font-size: 1.8rem; color: #ccc; margin: 6px 0;">
+                        <i class="fa-solid fa-star star-btn" data-star="1" data-type="service"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="2" data-type="service"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="3" data-type="service"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="4" data-type="service"></i>
+                        <i class="fa-solid fa-star star-btn" data-star="5" data-type="service"></i>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="feedbackText">Feedback / Review</label>
+                    <textarea id="feedbackText" placeholder="Tell us what you loved, or how we can improve..." style="width: 100%; height: 60px; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.85rem; resize: none; background-color: var(--color-bg-pure);"></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btnSubmitFeedback" class="btn-primary" style="width: 100%;">Submit Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Application Scripts -->
+    <script type="module" src="js/customer.js"></script>
+</body>
+</html>

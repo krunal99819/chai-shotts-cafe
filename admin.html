@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard & POS | Chai Shotts</title>
+    
+    <!-- CSS Dependencies -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/admin.css">
+    
+    <!-- JS Dependencies (CDNs) -->
+    <!-- Chart.js for analytics graphs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- QRious for table QR code generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <!-- jsPDF for reprintable invoices -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+    <div class="admin-layout">
+
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">CS</div>
+                <div class="sidebar-brand">
+                    <h2>Chai Shotts</h2>
+                    <span>Admin Panel</span>
+                </div>
+            </div>
+
+            <ul class="sidebar-menu">
+                <li class="menu-item active" data-target="tabDashboard">
+                    <button><i class="fa-solid fa-gauge"></i> Dashboard & POS</button>
+                </li>
+                <li class="menu-item" data-target="tabLiveOrders">
+                    <button><i class="fa-solid fa-receipt"></i> Live Orders</button>
+                </li>
+                <li class="menu-item" data-target="tabRequests">
+                    <button><i class="fa-solid fa-bell-concierge"></i> Service Calls <span id="sidebarRequestBadge" class="badge badge-danger" style="display:none; padding: 2px 6px; font-size:0.65rem;">0</span></button>
+                </li>
+                <li class="menu-item" data-target="tabMenuManager">
+                    <button><i class="fa-solid fa-mug-hot"></i> Menu Editor</button>
+                </li>
+                <li class="menu-item" data-target="tabAnalytics">
+                    <button><i class="fa-solid fa-chart-line"></i> Sales Analytics</button>
+                </li>
+                <li class="menu-item" data-target="tabQrManager">
+                    <button><i class="fa-solid fa-qrcode"></i> Table QR Codes</button>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <div class="staff-info">
+                    <div class="staff-name" id="adminStaffName">Staff Account</div>
+                    <div class="staff-role" id="adminStaffRole">POS Cashier</div>
+                </div>
+                <button id="btnAdminLogout" class="btn-secondary" style="border-color: rgba(255,255,255,0.15); color:white; padding:8px; font-size:0.8rem; width:100%;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Body -->
+        <main class="admin-main">
+            
+            <!-- Top Header -->
+            <header class="admin-topbar">
+                <div class="page-title">
+                    <h1 id="pageTitleText">Dashboard & POS Grid</h1>
+                </div>
+                <div style="display:flex; align-items:center; gap:20px; font-weight:600; color:var(--color-primary-deep);">
+                    <div id="liveClock"><i class="fa-regular fa-clock"></i> --:--:--</div>
+                    <div style="font-size: 0.85rem;" class="badge badge-success">Live Updates Sync</div>
+                </div>
+            </header>
+
+            <!-- Scrollable Content Pane -->
+            <div class="admin-body">
+
+                <!-- 1. DASHBOARD & POS GRID PANEL -->
+                <div id="tabDashboard" class="tab-content active">
+                    
+                    <!-- Metrics Row -->
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-details">
+                                <span>Today's Sales</span>
+                                <h3 id="mTodaySales">₹0</h3>
+                            </div>
+                            <div class="metric-icon"><i class="fa-solid fa-indian-rupee-sign"></i></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-details">
+                                <span>Total Orders</span>
+                                <h3 id="mTotalOrders">0</h3>
+                            </div>
+                            <div class="metric-icon"><i class="fa-solid fa-utensils"></i></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-details">
+                                <span>Running Tables</span>
+                                <h3 id="mActiveTables">0 / 30</h3>
+                            </div>
+                            <div class="metric-icon"><i class="fa-solid fa-chair"></i></div>
+                        </div>
+                        <div class="metric-card" style="cursor: pointer;" onclick="document.querySelector('[data-target=tabRequests]').click()">
+                            <div class="metric-details">
+                                <span>Active Alerts</span>
+                                <h3 id="mActiveRequests">0</h3>
+                            </div>
+                            <div class="metric-icon"><i class="fa-solid fa-bell"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Interactive split section -->
+                    <div class="pos-pane-layout">
+                        <!-- Table grid map -->
+                        <div>
+                            <h2 style="font-size: 1.2rem; margin-bottom: 12px; border-bottom: 1.5px solid var(--color-border); padding-bottom: 6px;">
+                                <i class="fa-solid fa-map"></i> Floor Layout Map (30 Tables)
+                            </h2>
+                            <div id="posTableGrid" class="pos-table-grid">
+                                <!-- Generated tables 1 to 30 dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Table checkout details box -->
+                        <div id="checkoutPanel" class="checkout-panel">
+                            <div id="checkoutPanelEmpty" style="text-align:center; padding: 40px 10px; color: var(--color-text-muted);">
+                                <i class="fa-solid fa-cash-register" style="font-size: 2.5rem; margin-bottom: 12px; color: var(--color-accent-gold);"></i>
+                                <p>Click an occupied table on the grid map to display its running bill and checkout options.</p>
+                            </div>
+                            
+                            <div id="checkoutPanelActive" style="display:none;">
+                                <div class="checkout-header">
+                                    <h3 style="font-size:1.15rem; color:var(--color-primary-deep);" id="checkoutTableHeader">Table #-- Bill</h3>
+                                    <span id="checkoutStatusBadge" class="badge">---</span>
+                                </div>
+
+                                <div style="font-size:0.85rem; color:var(--color-text-muted); margin-bottom:12px;" id="checkoutCustomerHeader">
+                                    Customer: -- | Phone: --
+                                </div>
+
+                                <div style="max-height: 250px; overflow-y: auto; border-bottom: 1px dashed var(--color-border); padding-bottom: 12px; margin-bottom: 12px;">
+                                    <div id="checkoutItemsList">
+                                        <!-- List of ordered items in running bill -->
+                                    </div>
+                                </div>
+
+                                <div style="font-size:0.9rem; margin-bottom:12px; display:flex; flex-direction:column; gap:4px;">
+                                    <div style="display:flex; justify-content:space-between;">
+                                        <span>Subtotal</span>
+                                        <span id="checkoutSubtotal">₹0</span>
+                                    </div>
+                                    <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
+                                        <span>GST (5%)</span>
+                                        <span id="checkoutTax">₹0</span>
+                                    </div>
+                                    <div style="display:flex; justify-content:space-between; font-weight:700; font-size:1.15rem; color:var(--color-primary-deep); margin-top:8px; border-top:1px solid var(--color-border); padding-top:8px;">
+                                        <span>Grand Total</span>
+                                        <span id="checkoutGrandTotal">₹0</span>
+                                    </div>
+                                </div>
+
+                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                    <div style="display:flex; gap:6px;">
+                                        <button class="btn-primary btn-checkout-action" data-method="UPI" style="flex:1; padding: 10px; font-size: 0.85rem; background-color: var(--color-primary-light);">
+                                            <i class="fa-solid fa-mobile-screen"></i> UPI
+                                        </button>
+                                        <button class="btn-primary btn-checkout-action" data-method="Cash" style="flex:1; padding: 10px; font-size: 0.85rem; background-color: var(--color-wood);">
+                                            <i class="fa-solid fa-wallet"></i> Cash
+                                        </button>
+                                        <button class="btn-primary btn-checkout-action" data-method="Card" style="flex:1; padding: 10px; font-size: 0.85rem; background-color: #1a4a6e;">
+                                            <i class="fa-solid fa-credit-card"></i> Card
+                                        </button>
+                                    </div>
+                                    <button id="btnPOSReprintInvoice" class="btn-secondary" style="width:100%; font-size:0.85rem; padding: 10px;">
+                                        <i class="fa-solid fa-print"></i> Generate / Print Invoice
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. LIVE ORDERS PANEL -->
+                <div id="tabLiveOrders" class="tab-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;">
+                        <h2 style="font-size:1.2rem;"><i class="fa-solid fa-clock-rotate-left"></i> Live Kitchen Tickets Queue</h2>
+                        <div id="liveOrderFilter" style="display:flex; gap:8px;">
+                            <button class="category-pill active" data-order-filter="all">All Active</button>
+                            <button class="category-pill" data-order-filter="received">New</button>
+                            <button class="category-pill" data-order-filter="preparing">Preparing</button>
+                            <button class="category-pill" data-order-filter="ready">Ready (Alerted)</button>
+                            <button class="category-pill" data-order-filter="served">Served</button>
+                        </div>
+                    </div>
+                    
+                    <div id="adminOrdersContainer" class="orders-split-grid">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- 3. SERVICE CALLS PANEL -->
+                <div id="tabRequests" class="tab-content">
+                    <h2 style="font-size:1.2rem; margin-bottom:16px;"><i class="fa-solid fa-bell"></i> Live Waiter Calls & Bill Requests</h2>
+                    <div id="adminRequestsContainer" class="requests-grid">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+
+                <!-- 4. MENU EDITOR PANEL -->
+                <div id="tabMenuManager" class="tab-content">
+                    <div class="menu-editor-grid">
+                        <!-- Editor Left: Add Forms -->
+                        <div class="editor-form-box">
+                            <h3 style="font-size:1.1rem; margin-bottom:16px; color:var(--color-primary-deep);"><i class="fa-solid fa-circle-plus"></i> Add New Product</h3>
+                            
+                            <form id="productForm">
+                                <div class="form-group">
+                                    <label for="prodName">Product Name *</label>
+                                    <input type="text" id="prodName" placeholder="E.g., Tandoori Paneer Sandwich" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prodCategory">Category *</label>
+                                    <select id="prodCategory" style="width: 100%; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.9rem; background-color: var(--color-bg-pure);" required>
+                                        <!-- Loaded dynamically -->
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prodPrice">Price (₹) *</label>
+                                    <input type="number" id="prodPrice" placeholder="E.g., 120" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prodDescription">Description</label>
+                                    <textarea id="prodDescription" placeholder="Specify ingredients, preparation method, size..." style="width: 100%; height: 60px; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.85rem; resize: none; background-color: var(--color-bg-pure);"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="prodImage">Image URL (Optional)</label>
+                                    <input type="url" id="prodImage" placeholder="https://unsplash.com/photo-...">
+                                </div>
+                                <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-top:10px;">
+                                    <input type="checkbox" id="prodPopular" style="width:auto;">
+                                    <label for="prodPopular" style="margin-bottom:0; cursor:pointer;">Mark as Chef Special / Popular</label>
+                                </div>
+                                <button type="submit" class="btn-primary" style="width: 100%; margin-top: 14px;">
+                                    <i class="fa-solid fa-save"></i> Save Product
+                                </button>
+                            </form>
+
+                            <!-- Add Category -->
+                            <h3 style="font-size:1.1rem; margin-top:28px; margin-bottom:16px; color:var(--color-primary-deep);"><i class="fa-solid fa-tags"></i> Add Category</h3>
+                            <form id="categoryForm">
+                                <div class="form-group">
+                                    <label for="catName">Category Name *</label>
+                                    <input type="text" id="catName" placeholder="E.g., Mocktails" required>
+                                </div>
+                                <button type="submit" class="btn-secondary" style="width: 100%;">
+                                    <i class="fa-solid fa-plus"></i> Save Category
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Editor Right: Database list -->
+                        <div class="editor-list-box">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid var(--color-border); padding-bottom:10px;">
+                                <h3 style="font-size:1.1rem; color:var(--color-primary-deep);"><i class="fa-solid fa-list-check"></i> Menu Catalog Items</h3>
+                                <select id="menuCatalogFilter" style="padding:6px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.85rem;">
+                                    <option value="all">All Categories</option>
+                                    <!-- Loaded dynamically -->
+                                </select>
+                            </div>
+
+                            <div id="catalogListContainer">
+                                <!-- Loaded dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. SALES ANALYTICS PANEL -->
+                <div id="tabAnalytics" class="tab-content">
+                    <h2 style="font-size:1.2rem; margin-bottom:16px;"><i class="fa-solid fa-chart-pie"></i> Business Performance Insights</h2>
+                    
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--color-primary-deep);">Hourly Order Traffic (Peak Hours)</h3>
+                            <canvas id="trafficChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--color-primary-deep);">Top Selling Menu Items</h3>
+                            <canvas id="itemsChart"></canvas>
+                        </div>
+                        <div class="chart-container" style="grid-column: 1 / -1;">
+                            <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--color-primary-deep);">Daily Revenue Performance</h3>
+                            <canvas id="revenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. QR CODE MANAGER PANEL -->
+                <div id="tabQrManager" class="tab-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1.5px solid var(--color-border); padding-bottom:10px;">
+                        <h2 style="font-size:1.2rem;"><i class="fa-solid fa-print"></i> Table QR Codes Printer Sheets</h2>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <label for="qrHostUrl" style="font-size:0.85rem; font-weight:600; color:var(--color-primary-deep);">Cafe Host URL:</label>
+                            <input type="text" id="qrHostUrl" value="http://localhost:8000" style="padding:6px 12px; border-radius:var(--radius-sm); font-size:0.85rem; width:220px;">
+                            <button id="btnPrintQrs" class="btn-primary" style="padding:8px 16px; font-size:0.85rem;" onclick="window.print()">
+                                <i class="fa-solid fa-print"></i> Print QR Sheets
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="qrPrintGrid" class="qr-print-grid">
+                        <!-- Instantly loads 30 printable Table QR Cards -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Application Script -->
+    <script type="module" src="js/admin.js"></script>
+</body>
+</html>

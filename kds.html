@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitchen Display System (KDS) | Chai Shotts</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/kds.css">
+</head>
+<body class="kds-body">
+
+    <!-- KDS Header -->
+    <header class="kds-header">
+        <div class="kds-brand">
+            <div class="kds-logo">CS</div>
+            <div class="kds-title">
+                <h1>Kitchen Console</h1>
+                <span>KDS Panel</span>
+            </div>
+        </div>
+
+        <div class="kds-stats">
+            <div class="stat-pill">
+                <i class="fa-solid fa-hourglass-start" style="color: var(--color-accent-gold);"></i>
+                <span>Queue:</span>
+                <span id="newCount" class="stat-count">0</span>
+            </div>
+            <div class="stat-pill">
+                <i class="fa-solid fa-fire-burner" style="color: #fd7e14;"></i>
+                <span>Preparing:</span>
+                <span id="prepCount" class="stat-count">0</span>
+            </div>
+        </div>
+
+        <div>
+            <button id="btnKdsLogout" class="btn-secondary" style="border-color: rgba(255,255,255,0.2); color: white; padding: 8px 16px;">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </button>
+        </div>
+    </header>
+
+    <!-- KDS Dashboard container -->
+    <div class="kds-container">
+        
+        <!-- Column 1: New Orders Queue -->
+        <div class="kds-column">
+            <div class="kds-col-header">
+                <h2><i class="fa-solid fa-circle-exclamation" style="color: var(--color-accent-gold);"></i> New Orders</h2>
+                <span class="badge badge-warning" id="colNewBadge">0 Tickets</span>
+            </div>
+            <div id="newOrdersContainer" class="kds-card-list">
+                <!-- Loaded dynamically -->
+            </div>
+        </div>
+
+        <!-- Column 2: Preparing Queue -->
+        <div class="kds-column">
+            <div class="kds-col-header">
+                <h2><i class="fa-solid fa-fire-burner" style="color: #fd7e14;"></i> Preparing</h2>
+                <span class="badge badge-success" id="colPrepBadge" style="background-color:rgba(253, 126, 20, 0.15); color:#fd7e14; border-color:rgba(253, 126, 20, 0.3)">0 Active</span>
+            </div>
+            <div id="preparingContainer" class="kds-card-list">
+                <!-- Loaded dynamically -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Application Script -->
+    <script type="module" src="js/kds.js"></script>
+</body>
+</html>
