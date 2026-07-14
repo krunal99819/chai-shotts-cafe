@@ -984,7 +984,19 @@ function renderAnalyticsCharts() {
 
 function generateTableQRSheets() {
     const hostUrl = elements.qrHostUrl.value.trim();
-    let html = "";
+    
+    // 1. Add Master Unified QR Code Card (Grid header item)
+    let html = `
+        <div class="qr-card-print" style="border-color:var(--color-accent-gold); box-shadow:0 0 15px rgba(223,168,86,0.3); grid-column: 1 / -1; max-width:280px; margin: 0 auto 20px auto;">
+            <h4>CHAI SHOTTS</h4>
+            <div style="font-size:0.75rem; text-transform:uppercase; font-weight:700; color:var(--color-accent-gold-dark);">MASTER UNIFIED QR</div>
+            <div class="qr-card-print-img">
+                <canvas id="qrCanvasMaster"></canvas>
+            </div>
+            <div style="font-family:var(--font-heading); font-weight:800; font-size:1.15rem; color:var(--color-primary-deep)">ALL TABLES QR</div>
+            <div style="font-size:0.7rem; color:var(--color-text-muted); margin-top:2px;">Prompts customer for Table No.</div>
+        </div>
+    `;
     
     // Generate cards for tables 1 to 30
     for (let tNum = 1; tNum <= 30; tNum++) {
@@ -1002,7 +1014,20 @@ function generateTableQRSheets() {
     
     elements.qrPrintGrid.innerHTML = html;
 
-    // Draw the QR codes on the canvases
+    // Draw Master QR code on Canvas
+    const masterCanvas = document.getElementById("qrCanvasMaster");
+    if (masterCanvas) {
+        new QRious({
+            element: masterCanvas,
+            value: `${hostUrl}/index.html`,
+            size: 130,
+            background: '#ffffff',
+            foreground: '#dfa856', // Gold QR code for Master Card
+            level: 'H'
+        });
+    }
+
+    // Draw the QR codes on the canvases for Tables 1 to 30
     for (let tNum = 1; tNum <= 30; tNum++) {
         const canvas = document.getElementById(`qrCanvasTable_${tNum}`);
         if (canvas) {

@@ -166,50 +166,21 @@
         </div>
     </div>
 
-    <!-- Modal 1: Table Selection (Demoware Fallback if no table in query string) -->
-    <div id="tableSelectModal" class="modal-overlay">
+    <!-- Unified Customer Registration Modal -->
+    <div id="customerInfoModal" class="modal-overlay">
         <div class="modal-box">
             <h3 class="modal-title"><i class="fa-solid fa-mug-hot"></i> Welcome to Chai Shotts</h3>
             <div class="modal-body">
                 <p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center; margin-bottom: 16px;">
-                    Select a table number to simulate scanning a table QR code.
-                </p>
-                <div class="form-group">
-                    <label for="tableNumberSelect">Select Table Number</label>
-                    <select id="tableNumberSelect" class="form-group" style="width: 100%; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.9rem; background-color: var(--color-bg-pure);">
-                        <!-- Tables 1 to 30 -->
-                        <option value="1">Table 1 (Tea Zone)</option>
-                        <option value="2">Table 2</option>
-                        <option value="3">Table 3</option>
-                        <option value="4">Table 4</option>
-                        <option value="5">Table 5 (Corner Sofa)</option>
-                        <option value="6">Table 6</option>
-                        <option value="7">Table 7</option>
-                        <option value="8">Table 8</option>
-                        <option value="12">Table 12 (Premium Booth)</option>
-                        <option value="15">Table 15</option>
-                        <option value="20">Table 20</option>
-                        <option value="30">Table 30 (Family Lounge)</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button id="btnConfirmTable" class="btn-primary" style="width: 100%;">Proceed to Menu</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal 2: Customer Registration Modal (Asked on first order if session does not exist) -->
-    <div id="customerInfoModal" class="modal-overlay">
-        <div class="modal-box">
-            <h3 class="modal-title"><i class="fa-solid fa-user-tag"></i> Start Your Session</h3>
-            <div class="modal-body">
-                <p style="font-size: 0.85rem; color: var(--color-text-muted); text-align: center; margin-bottom: 16px;">
-                    Enter details to create an open table session for ordering.
+                    Enter details to start ordering from your table.
                 </p>
                 <div class="form-group">
                     <label for="custNameInput">Your Name *</label>
                     <input type="text" id="custNameInput" placeholder="Enter your name" required>
+                </div>
+                <div class="form-group" id="tableInputGroup">
+                    <label for="custTableInput">Table Number *</label>
+                    <input type="number" id="custTableInput" min="1" max="30" placeholder="E.g., 5" required>
                 </div>
                 <div class="form-group">
                     <label for="custPhoneInput">Mobile Number (Optional)</label>

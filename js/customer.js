@@ -44,14 +44,12 @@ const elements = {
     runningSessionAmount: document.getElementById('runningSessionAmount'),
 
     // Modals
-    tableSelectModal: document.getElementById('tableSelectModal'),
-    btnConfirmTable: document.getElementById('btnConfirmTable'),
-    tableNumberSelect: document.getElementById('tableNumberSelect'),
-    
     customerInfoModal: document.getElementById('customerInfoModal'),
     btnStartSession: document.getElementById('btnStartSession'),
     custNameInput: document.getElementById('custNameInput'),
+    custTableInput: document.getElementById('custTableInput'),
     custPhoneInput: document.getElementById('custPhoneInput'),
+    tableInputGroup: document.getElementById('tableInputGroup'),
     
     waiterConfirmModal: document.getElementById('waiterConfirmModal'),
     btnCallWaiter: document.getElementById('btnCallWaiter'),
@@ -100,13 +98,17 @@ async function initApp() {
     if (tableParam) {
         tableNumber = parseInt(tableParam);
         elements.tableIndicator.innerHTML = `<i class="fa-solid fa-chair"></i> Table ${tableNumber}`;
-        elements.tableSelectModal.classList.remove('open');
+        
+        // Prefill and hide table input
+        elements.custTableInput.value = tableNumber;
+        elements.tableInputGroup.style.display = 'none';
         
         // 2. Check for active session
         await checkActiveSession();
     } else {
-        // No table specified -> Show simulator selector modal
-        elements.tableSelectModal.classList.add('open');
+        // No table specified -> Display unified modal asking for Table number
+        elements.tableInputGroup.style.display = 'block';
+        elements.customerInfoModal.classList.add('open');
     }
     
     // 3. Load Menu Data (Categories & Products)
@@ -118,13 +120,6 @@ async function initApp() {
 }
 
 function setupEventListeners() {
-    // Demo Table Selector
-    elements.btnConfirmTable.addEventListener('click', () => {
-        const selectedTable = elements.tableNumberSelect.value;
-        // Reload page with table parameter
-        window.location.search = `?table=${selectedTable}`;
-    });
-
     // Session Registration
     elements.btnStartSession.addEventListener('click', handleCreateSession);
 
@@ -221,18 +216,38 @@ async function checkActiveSession() {
 async function handleCreateSession() {
     const name = elements.custNameInput.value.trim();
     const phone = elements.custPhoneInput.value.trim();
+    const tableVal = parseInt(elements.custTableInput.value);
     
     if (!name) {
         alert("Please enter your name to start ordering.");
         return;
     }
 
+    if (!tableVal || tableVal < 1 || tableVal > 30) {
+        alert("Please enter a valid Table Number between 1 and 30.");
+        return;
+    }
+
+    tableNumber = tableVal;
+    elements.tableIndicator.innerHTML = `<i class="fa-solid fa-chair"></i> Table ${tableNumber}`;
+
     try {
+        // Check if there is already an active session for this table
+        const existingSession = await db.sessions.getActive(tableNumber);
+        if (existingSession) {
+            activeSession = existingSession;
+            elements.customerInfoModal.classList.remove('open');
+            listenToSessionChanges(existingSession.id);
+            syncRunningBill();
+            alert(`Welcome back, ${name}! Restoring your open session for Table ${tableNumber}.`);
+            return;
+        }
+
         const session = await db.sessions.create(tableNumber, name, phone);
         activeSession = session;
         elements.customerInfoModal.classList.remove('open');
         listenToSessionChanges(session.id);
-        alert(`Welcome, ${name}! Your ordering session is active.`);
+        alert(`Welcome, ${name}! Your ordering session is active at Table ${tableNumber}.`);
     } catch (e) {
         console.error(e);
         alert("Failed to start session. Please try again.");
