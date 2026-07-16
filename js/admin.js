@@ -79,7 +79,7 @@ const elements = {
 // 1. AUTHENTICATION & GLOBAL TIMER
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+function startAdminApp() {
     // Authenticate Role
     db.auth.listenState(user => {
         if (!user || user.role !== 'admin') {
@@ -93,7 +93,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         initAdminPanel();
     });
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startAdminApp);
+} else {
+    startAdminApp();
+}
 
 function initAdminPanel() {
     // 1. Start Clock

@@ -92,9 +92,13 @@ const elements = {
 // 1. APPLICATION INITIALIZATION & ROUTING
 // ==========================================================================
 
-document.addEventListener('DOMContentLoaded', () => {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initApp();
+    });
+} else {
     initApp();
-});
+}
 
 async function initApp() {
     // 1. Parse Table Number from URL
