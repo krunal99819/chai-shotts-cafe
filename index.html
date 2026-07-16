@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Chai Shotts Cafe | Smart QR Ordering</title>
+    <script>
+        window.addEventListener('error', function(e) {
+            alert("JS Error: " + e.message + "\nFile: " + e.filename + "\nLine: " + e.lineno);
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            alert("Unhandled Promise Rejection: " + e.reason);
+        });
+    </script>
     
     <!-- Meta Tags for SEO -->
     <meta name="description" content="Order delicious gourmet chai, cold coffee, pizza, burgers, and snacks directly from your table at Chai Shotts Cafe. Fast, digital, and cashless.">
