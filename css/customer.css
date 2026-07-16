@@ -779,3 +779,27 @@
     color: var(--color-primary-deep);
     margin: 8px 0;
 }
+
+/* Out of Stock Styling */
+.product-card.out-of-stock-card {
+    opacity: 0.65;
+    position: relative;
+    pointer-events: none; /* Disable clicks on card body */
+}
+.product-card.out-of-stock-card .qty-selector, 
+.product-card.out-of-stock-card .add-btn {
+    pointer-events: auto; /* Allow cursor styles on buttons */
+}
+.out-of-stock-badge {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background-color: #dc3545;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+    z-index: 10;
+}

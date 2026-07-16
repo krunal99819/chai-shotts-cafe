@@ -12,6 +12,7 @@ let currentCategory = 'all';
 let searchQuery = '';
 let cart = {}; // Format: { productId: { product, quantity, notes } }
 let activeOrderId = null; // Track most recent order ID placed
+let gstEnabled = false; // Synchronized global GST configuration flag
 
 // DOM Elements
 const elements = {
@@ -53,6 +54,8 @@ const elements = {
     orderZoneSelect: document.getElementById('orderZoneSelect'),
     hotelInputGroup: document.getElementById('hotelInputGroup'),
     hotelRoomInput: document.getElementById('hotelRoomInput'),
+    otherInputGroup: document.getElementById('otherInputGroup'),
+    otherPlaceInput: document.getElementById('otherPlaceInput'),
     
     waiterConfirmModal: document.getElementById('waiterConfirmModal'),
     btnCallWaiter: document.getElementById('btnCallWaiter'),
@@ -120,6 +123,19 @@ async function initApp() {
     db.categories.listen(loadCategories);
     db.products.listen(loadProducts);
     
+    // Load global settings (GST config)
+    db.settings.listen(settings => {
+        gstEnabled = settings.gstEnabled || false;
+        // Dynamically update UI calculations
+        updateCartUI();
+        if (elements.cartDrawer.classList.contains('open')) {
+            renderCartDrawerList();
+        }
+        if (activeSession) {
+            syncRunningBill();
+        }
+    });
+
     // 4. Setup Event Listeners
     setupEventListeners();
 }
@@ -133,6 +149,12 @@ function setupEventListeners() {
         const zone = e.target.value;
         elements.tableInputGroup.style.display = zone === 'table' ? 'block' : 'none';
         elements.hotelInputGroup.style.display = zone === 'hotel' ? 'block' : 'none';
+        elements.otherInputGroup.style.display = zone === 'other' ? 'block' : 'none';
+        
+        const phoneLabel = document.querySelector('label[for="custPhoneInput"]');
+        if (phoneLabel) {
+            phoneLabel.innerHTML = zone === 'other' ? 'Mobile Number *' : 'Mobile Number (Optional)';
+        }
     });
 
     // Search and Filters
@@ -254,28 +276,64 @@ async function handleCreateSession() {
         }
         localTableNum = 10; // Virtual table ID for Hotel Partner
         locationLabel = `${room} (HOTEL RELAX INN)`;
+    } else if (zone === 'other') {
+        const place = elements.otherPlaceInput.value.trim();
+        if (!place) {
+            alert("Please specify your place/address.");
+            return;
+        }
+        if (!phone || phone.length < 10) {
+            alert("Please enter a valid 10-digit Mobile Number (required for deliveries/takeaway).");
+            return;
+        }
+        localTableNum = 11; // Virtual table ID for Outside Deliveries
+        locationLabel = `${place} (Takeaway/Delivery)`;
     }
 
     tableNumber = localTableNum;
     elements.tableIndicator.innerHTML = `<i class="fa-solid fa-location-dot"></i> ${locationLabel}`;
 
     try {
-        // Check if there is already an active session for this exact location & customer name
+        // Check if there is already an active session for this table or hotel room
         const sessions = await new Promise(resolve => {
             db.sessions.listen(allSess => {
                 resolve(allSess.filter(s => s.status === 'open'));
             });
         });
         
-        const existingSession = sessions.find(s => s.tableNumber === localTableNum && s.customerName === name && (zone === 'table' ? true : s.customerPhone === phone));
+        const activeLocationSess = sessions.find(s => s.tableNumber === localTableNum && (localTableNum < 10 ? true : s.locationLabel.toLowerCase() === locationLabel.toLowerCase()));
         
-        if (existingSession) {
-            activeSession = existingSession;
-            elements.customerInfoModal.classList.remove('open');
-            listenToSessionChanges(existingSession.id);
-            syncRunningBill();
-            alert(`Welcome back, ${name}! Rejoining your active session for ${locationLabel}.`);
-            return;
+        if (activeLocationSess) {
+            // Rejoining own session if name matches
+            if (activeLocationSess.customerName.toLowerCase() === name.toLowerCase()) {
+                activeSession = activeLocationSess;
+                elements.customerInfoModal.classList.remove('open');
+                listenToSessionChanges(activeLocationSess.id);
+                syncRunningBill();
+                alert(`Welcome back, ${name}! Rejoining your active session for ${locationLabel}.`);
+                return;
+            } else {
+                // Different name! Ask to join the session
+                const join = confirm(`${locationLabel} already has an active ordering session started by ${activeLocationSess.customerName}.\n\nWould you like to join their group and order together on the same bill?`);
+                if (join) {
+                    activeSession = activeLocationSess;
+                    elements.customerInfoModal.classList.remove('open');
+                    listenToSessionChanges(activeLocationSess.id);
+                    syncRunningBill();
+                    alert(`Joined active session started by ${activeLocationSess.customerName}. You can now order together!`);
+                    return;
+                } else {
+                    // Send notification to Admin that another person is trying to access the same table/room!
+                    try {
+                        await db.requests.add(localTableNum, `duplicate_session:${name} tried to access this location, but declined joining ${activeLocationSess.customerName}'s session.`, locationLabel);
+                    } catch (err) {
+                        console.error("Failed to notify admin of duplicate session access: ", err);
+                    }
+                    // Do not allow starting a duplicate active session on the same occupied location
+                    alert(`Cannot start a new session on ${locationLabel} while it is occupied. Please wait or select another table.`);
+                    return;
+                }
+            }
         }
 
         const session = await db.sessions.create(localTableNum, name, phone, locationLabel, zone);
@@ -341,6 +399,10 @@ function handleSessionUpdate(session) {
         }
     } else {
         syncRunningBill();
+        if (elements.cartDrawer.classList.contains('open')) {
+            renderCartDrawerList();
+        }
+        updateCartUI();
     }
 }
 
@@ -376,7 +438,7 @@ function loadProducts(products) {
 }
 
 function renderMenu() {
-    let filteredProducts = menuProducts.filter(p => p.isAvailable);
+    let filteredProducts = [...menuProducts];
     
     // Filter by Category
     if (currentCategory !== 'all') {
@@ -429,12 +491,19 @@ function renderMenu() {
             items.forEach(prod => {
                 const cartQty = cart[prod.id] ? cart[prod.id].quantity : 0;
                 const isPopular = prod.isPopular ? `<span class="popular-tag">Popular</span>` : ``;
+                const isAvailable = prod.isAvailable !== false;
                 
-                let actionBtnHTML = `
-                    <button class="add-btn" data-prod-id="${prod.id}">ADD</button>
-                `;
-                
-                if (cartQty > 0) {
+                let actionBtnHTML = "";
+                let cardClass = "product-card";
+                let imgOverlay = isPopular;
+
+                if (!isAvailable) {
+                    cardClass = "product-card out-of-stock-card";
+                    imgOverlay = `<span class="out-of-stock-badge">Sold Out</span>`;
+                    actionBtnHTML = `
+                        <button class="add-btn disabled" disabled style="background-color:var(--color-border); color:var(--color-text-muted); cursor:not-allowed; border-color:var(--color-border);">SOLD OUT</button>
+                    `;
+                } else if (cartQty > 0) {
                     actionBtnHTML = `
                         <div class="qty-selector">
                             <button class="qty-btn dec-qty" data-prod-id="${prod.id}">-</button>
@@ -442,13 +511,17 @@ function renderMenu() {
                             <button class="qty-btn inc-qty" data-prod-id="${prod.id}">+</button>
                         </div>
                     `;
+                } else {
+                    actionBtnHTML = `
+                        <button class="add-btn" data-prod-id="${prod.id}">ADD</button>
+                    `;
                 }
 
                 html += `
-                    <div class="product-card">
+                    <div class="${cardClass}">
                         <div class="product-img-container">
                             <img src="${prod.image}" alt="${prod.name}" onerror="this.src='https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=300'">
-                            ${isPopular}
+                            ${imgOverlay}
                         </div>
                         <div class="product-details">
                             <div class="product-info">
@@ -601,8 +674,7 @@ function renderCartDrawerList() {
     elements.cartItemsList.innerHTML = html;
     
     // Calculations
-    const gstRate = 0.05; // 5% total (2.5% CGST + 2.5% SGST)
-    const tax = Math.round(subtotal * gstRate);
+    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0;
     let grandTotal = subtotal + tax;
 
     elements.drawerSubtotal.innerText = `₹${subtotal}`;
@@ -933,7 +1005,7 @@ function generateInvoicePDF(session, orders) {
     doc.line(margin, y, 80 - margin, y);
 
     // Calculation Lines
-    const tax = Math.round(subtotal * 0.05); // 5% total GST
+    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0; // 5% total GST if enabled
     const cgst = (tax / 2).toFixed(2);
     const sgst = (tax / 2).toFixed(2);
     const grandTotal = subtotal + tax;
@@ -942,13 +1014,15 @@ function generateInvoicePDF(session, orders) {
     doc.text("Subtotal:", 48, y, { align: "right" });
     doc.text(`₹${subtotal}`, 80 - margin, y, { align: "right" });
 
-    y += 4;
-    doc.text("CGST (2.5%):", 48, y, { align: "right" });
-    doc.text(`₹${cgst}`, 80 - margin, y, { align: "right" });
+    if (gstEnabled) {
+        y += 4;
+        doc.text("CGST (2.5%):", 48, y, { align: "right" });
+        doc.text(`₹${cgst}`, 80 - margin, y, { align: "right" });
 
-    y += 4;
-    doc.text("SGST (2.5%):", 48, y, { align: "right" });
-    doc.text(`₹${sgst}`, 80 - margin, y, { align: "right" });
+        y += 4;
+        doc.text("SGST (2.5%):", 48, y, { align: "right" });
+        doc.text(`₹${sgst}`, 80 - margin, y, { align: "right" });
+    }
 
     y += 5;
     doc.setFont("Inter", "bold");
@@ -971,17 +1045,17 @@ function generateInvoicePDF(session, orders) {
 }
 
 function openUPIPaymentModal(amount) {
-    const cgstSgstTotal = Math.round(amount * 1.05); // Include 5% GST
-    elements.paymentAmount.innerText = `₹${cgstSgstTotal}`;
+    const finalTotal = gstEnabled ? Math.round(amount * 1.05) : amount;
+    elements.paymentAmount.innerText = `₹${finalTotal}`;
     elements.paymentModal.classList.add('open');
     
     // Configure Merchant UPI Details
     const merchantUPI = "chaishotts@upi"; // Chai Shotts Payee Address
     const payeeName = "Chai Shotts Cafe";
-    const transactionNote = `Table ${tableNumber} Ordering Bill`;
+    const transactionNote = `${activeSession?.locationLabel || "Table " + tableNumber} Ordering Bill`;
     
     // Generate UPI URL
-    const upiUrl = `upi://pay?pa=${encodeURIComponent(merchantUPI)}&pn=${encodeURIComponent(payeeName)}&am=${cgstSgstTotal}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(merchantUPI)}&pn=${encodeURIComponent(payeeName)}&am=${finalTotal}&cu=INR&tn=${encodeURIComponent(transactionNote)}`;
     
     // Generate QR Code on Canvas using QRious
     new QRious({

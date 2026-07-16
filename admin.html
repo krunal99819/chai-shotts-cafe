@@ -17,6 +17,25 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
     <!-- jsPDF for reprintable invoices -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        .switch-container input:checked + .switch-slider {
+            background-color: var(--color-primary-light);
+        }
+        .switch-container input:checked + .switch-slider:before {
+            transform: translateX(16px);
+        }
+        .switch-container .switch-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+    </style>
 </head>
 <body>
 
@@ -72,7 +91,15 @@
                 <div class="page-title">
                     <h1 id="pageTitleText">Dashboard & POS Grid</h1>
                 </div>
-                <div style="display:flex; align-items:center; gap:20px; font-weight:600; color:var(--color-primary-deep);">
+                <div style="display:flex; align-items:center; gap:24px; font-weight:600; color:var(--color-primary-deep);">
+                    <!-- Global GST Toggle Switch -->
+                    <div style="display:flex; align-items:center; gap:8px; font-size:0.85rem; background:rgba(255,255,255,0.5); padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--color-border);">
+                        <span>GST (5%)</span>
+                        <label class="switch-container" style="position:relative; display:inline-block; width:36px; height:20px; margin-bottom:0; cursor:pointer;">
+                            <input type="checkbox" id="toggleGstConfig" style="opacity:0; width:0; height:0;">
+                            <span class="switch-slider" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:#ccc; transition:.3s; border-radius:20px;"></span>
+                        </label>
+                    </div>
                     <div id="liveClock"><i class="fa-regular fa-clock"></i> --:--:--</div>
                     <div style="font-size: 0.85rem;" class="badge badge-success">Live Updates Sync</div>
                 </div>
@@ -129,7 +156,7 @@
 
                             <!-- Partner and External sessions -->
                             <h2 style="font-size: 1.2rem; margin-top: 28px; margin-bottom: 12px; border-bottom: 1.5px solid var(--color-border); padding-bottom: 6px;">
-                                <i class="fa-solid fa-hotel"></i> Hotel Relax Inn Deliveries
+                                <i class="fa-solid fa-map-location-dot"></i> Hotel & Outside Deliveries
                             </h2>
                             <div id="externalSessionsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
                                 <!-- Active Hotel rooms/Shops loaded dynamically -->
@@ -254,6 +281,10 @@
                                 <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-top:10px;">
                                     <input type="checkbox" id="prodPopular" style="width:auto;">
                                     <label for="prodPopular" style="margin-bottom:0; cursor:pointer;">Mark as Chef Special / Popular</label>
+                                </div>
+                                <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-top:6px;">
+                                    <input type="checkbox" id="prodAvailable" style="width:auto;" checked>
+                                    <label for="prodAvailable" style="margin-bottom:0; cursor:pointer;">In Stock (Available for ordering)</label>
                                 </div>
                                 <button type="submit" class="btn-primary" style="width: 100%; margin-top: 14px;">
                                     <i class="fa-solid fa-save"></i> Save Product

@@ -11,6 +11,7 @@ let allProducts = [];
 let selectedSession = null;
 let selectedTable = null;
 let editingProductId = null; // Track product edit state
+let gstEnabled = false; // Synchronized global GST configuration flag
 
 // Chart instances (to destroy/recreate on data change)
 let trafficChartInstance = null;
@@ -63,9 +64,11 @@ const elements = {
     prodDescription: document.getElementById('prodDescription'),
     prodImage: document.getElementById('prodImage'),
     prodPopular: document.getElementById('prodPopular'),
+    prodAvailable: document.getElementById('prodAvailable'),
     catName: document.getElementById('catName'),
     menuCatalogFilter: document.getElementById('menuCatalogFilter'),
     catalogListContainer: document.getElementById('catalogListContainer'),
+    toggleGstConfig: document.getElementById('toggleGstConfig'),
     
     // QR Manager
     qrHostUrl: document.getElementById('qrHostUrl'),
@@ -105,6 +108,19 @@ function initAdminPanel() {
     db.requests.listen(handleRequestsUpdate);
     db.categories.listen(handleCategoriesUpdate);
     db.products.listen(handleProductsUpdate);
+    // Listen to global settings (GST config)
+    db.settings.listen(settings => {
+        gstEnabled = settings.gstEnabled || false;
+        elements.toggleGstConfig.checked = gstEnabled;
+        if (selectedSession) {
+            loadCheckoutDrawer(selectedSession);
+        }
+    });
+
+    elements.toggleGstConfig.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        await db.settings.setGst(checked);
+    });
 
     // 4. Bind Action Listeners
     setupCheckoutActions();
@@ -200,7 +216,7 @@ function handleRequestsUpdate(requests) {
     if (pending.length > unresolvedRequestCount) {
         const newest = pending[0]; // first item in sorted list
         if (newest) {
-            if (newest.type === 'waiter') {
+            if (newest.type === 'waiter' || newest.type.startsWith('duplicate_session')) {
                 soundEffects.playWaiter(); // bell chime
             } else if (newest.type.includes('bill')) {
                 soundEffects.playBill(); // cash register chime
@@ -403,8 +419,13 @@ function loadCheckoutDrawer(session) {
         keys.forEach(pId => {
             const item = consolidatedItems[pId];
             itemsHtml += `
-                <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:6px;">
-                    <span>${item.name} <strong style="color:var(--color-primary-deep)">x${item.qty}</strong></span>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; margin-bottom:8px;">
+                    <span>
+                        <button class="btn-delete-bill-item" data-prod-id="${pId}" style="background:none; border:none; color:#dc3545; padding:0; margin-right:8px; cursor:pointer;" title="Delete item from bill">
+                            <i class="fa-solid fa-trash-can" style="font-size:0.75rem;"></i>
+                        </button>
+                        ${item.name} <strong style="color:var(--color-primary-deep)">x${item.qty}</strong>
+                    </span>
                     <span style="font-family:var(--font-heading); font-weight:700;">₹${item.qty * item.price}</span>
                 </div>
             `;
@@ -413,9 +434,35 @@ function loadCheckoutDrawer(session) {
 
     elements.checkoutItemsList.innerHTML = itemsHtml;
 
-    // Billing Totals (including 5% total GST)
+    // Bind delete bill item buttons
+    elements.checkoutItemsList.querySelectorAll('.btn-delete-bill-item').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const pId = e.currentTarget.dataset.prodId;
+            const item = consolidatedItems[pId];
+            if (confirm(`Remove "${item.name}" entirely from Table Session?`)) {
+                try {
+                    await db.sessions.deleteItem(session.id, pId);
+                    // Fetch updated session details and reload checkout drawer
+                    const sessions = await new Promise(resolve => {
+                        db.sessions.listen(allSess => {
+                            resolve(allSess);
+                        });
+                    });
+                    const updatedSess = sessions.find(s => s.id === session.id);
+                    if (updatedSess) {
+                        loadCheckoutDrawer(updatedSess);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert("Failed to delete item from session.");
+                }
+            }
+        });
+    });
+
+    // Billing Totals (GST conditionally configured)
     const subtotal = session.totalAmount;
-    const tax = Math.round(subtotal * 0.05);
+    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0;
     const grandTotal = subtotal + tax;
 
     elements.checkoutSubtotal.innerText = `₹${subtotal}`;
@@ -535,16 +582,18 @@ function reprintPOSInvoice(session, orders) {
     y += 4;
     doc.line(margin, y, 80 - margin, y);
 
-    const tax = Math.round(subtotal * 0.05);
+    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0;
     const grandTotal = subtotal + tax;
 
     y += 5;
     doc.text("Subtotal:", 48, y, { align: "right" });
     doc.text(`₹${subtotal}`, 80 - margin, y, { align: "right" });
 
-    y += 4;
-    doc.text("GST (5%):", 48, y, { align: "right" });
-    doc.text(`₹${tax}`, 80 - margin, y, { align: "right" });
+    if (gstEnabled) {
+        y += 4;
+        doc.text("GST (5%):", 48, y, { align: "right" });
+        doc.text(`₹${tax}`, 80 - margin, y, { align: "right" });
+    }
 
     y += 5;
     doc.setFont("Inter", "bold");
@@ -705,11 +754,13 @@ function renderRequestsQueue() {
         if (req.type === 'bill_printed') typeBadge = `<span class="badge badge-danger" style="background:#8b4f2c; color:white; border-color:#8b4f2c;"><i class="fa-solid fa-print"></i> Printed Invoice</span>`;
         if (req.type === 'bill_digital') typeBadge = `<span class="badge badge-info"><i class="fa-solid fa-file-pdf"></i> Digital PDF Bill</span>`;
         if (req.type.startsWith('feedback:')) typeBadge = `<span class="badge badge-success"><i class="fa-solid fa-heart"></i> Feedback Sent</span>`;
+        if (req.type.startsWith('duplicate_session:')) typeBadge = `<span class="badge badge-danger" style="background:#dc3545; color:white; border-color:#dc3545;"><i class="fa-solid fa-triangle-exclamation"></i> Session Warning</span>`;
 
         let detailsText = "Requested waiter service.";
         if (req.type === 'bill_printed') detailsText = "Wants paper bill delivered to table.";
         if (req.type === 'bill_digital') detailsText = "Downloaded digital PDF. Needs UPI verification / cashier approval.";
         if (req.type.startsWith('feedback:')) detailsText = req.type.replace('feedback:', '');
+        if (req.type.startsWith('duplicate_session:')) detailsText = req.type.replace('duplicate_session:', '');
 
         const locationText = req.locationLabel || `Table ${req.tableNumber}`;
         html += `
@@ -795,7 +846,7 @@ function setupMenuEditorActions() {
             description: desc,
             image: img,
             isPopular: popular,
-            isAvailable: true
+            isAvailable: elements.prodAvailable.checked
         };
 
         try {
@@ -904,6 +955,7 @@ function renderMenuCatalog() {
                 elements.prodDescription.value = prod.description || "";
                 elements.prodImage.value = prod.image || "";
                 elements.prodPopular.checked = prod.isPopular || false;
+                elements.prodAvailable.checked = prod.isAvailable !== false;
                 
                 // Scroll form to view and rename save button
                 elements.prodName.focus();
