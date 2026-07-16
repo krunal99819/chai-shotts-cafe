@@ -21,6 +21,8 @@ if (useFirebase) {
         auth = getAuth(app);
         firebaseInitialized = true;
         console.log("Firebase initialized successfully.");
+        // Seed default products and categories if Firestore is empty
+        seedFirestoreIfNeeded();
     } catch (error) {
         console.error("Failed to initialize Firebase, falling back to LocalStorage mock database.", error);
         firebaseInitialized = false;
@@ -573,4 +575,46 @@ export const db = {
         }
     }
 };
+
+async function seedFirestoreIfNeeded() {
+    try {
+        const { collection, getDocs, doc, setDoc, limit, query } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+        
+        // 1. Seed Products
+        const prodSnap = await getDocs(query(collection(firestore, 'products'), limit(1)));
+        if (prodSnap.empty) {
+            console.log("Seeding default products to Firestore...");
+            for (const prod of defaultProducts) {
+                const { id, ...data } = prod;
+                await setDoc(doc(firestore, 'products', id || 'prod_' + Date.now() + Math.random()), {
+                    ...data,
+                    inStock: true
+                });
+            }
+        }
+
+        // 2. Seed Categories
+        const catSnap = await getDocs(query(collection(firestore, 'categories'), limit(1)));
+        if (catSnap.empty) {
+            console.log("Seeding default categories to Firestore...");
+            for (const cat of defaultCategories) {
+                const { id, ...data } = cat;
+                await setDoc(doc(firestore, 'categories', id || 'cat_' + Date.now() + Math.random()), data);
+            }
+        }
+
+        // 3. Seed Settings
+        const settingsSnap = await getDocs(query(collection(firestore, 'settings'), limit(1)));
+        if (settingsSnap.empty) {
+            console.log("Seeding default settings to Firestore...");
+            await setDoc(doc(firestore, 'settings', 'global'), {
+                gstEnabled: false
+            });
+        }
+        console.log("Firestore seeding check completed successfully.");
+    } catch (e) {
+        console.error("Firestore auto-seeding failed:", e);
+    }
+}
+
 export default db;
