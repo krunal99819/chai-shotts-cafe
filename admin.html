@@ -46,54 +46,6 @@
     </style>
 </head>
 <body>
-    <div id="debugConsole" style="position:fixed; bottom:0; left:0; width:100%; max-height:220px; overflow-y:auto; background:rgba(0,0,0,0.9); color:#00ff00; font-family:monospace; font-size:12px; z-index:999999; padding:12px; border-top:3px solid red; box-shadow:0 -5px 15px rgba(0,0,0,0.5); box-sizing:border-box;">
-      <h3 style="margin:0 0 8px 0; font-size:14px; border-bottom:1px solid #333; padding-bottom:4px; color:white; display:flex; justify-content:between;">
-        <span>🔍 Live Cafe Console Log (Diagnostics)</span>
-        <button onclick="document.getElementById('debugLogs').innerHTML=''" style="background:#444; color:white; border:none; padding:2px 8px; border-radius:3px; cursor:pointer; font-size:10px; float:right;">Clear</button>
-      </h3>
-      <div id="debugLogs"></div>
-    </div>
-    <script>
-        (function() {
-            const logsDiv = document.getElementById('debugLogs');
-            function appendLog(type, args) {
-                const p = document.createElement('div');
-                p.style.margin = '5px 0';
-                p.style.padding = '3px';
-                p.style.borderBottom = '1px solid #222';
-                p.style.whiteSpace = 'pre-wrap';
-                p.style.wordBreak = 'break-all';
-                p.style.color = type === 'error' ? '#ff4d4d' : '#85e785';
-                p.innerText = `[${type.toUpperCase()} ${new Date().toLocaleTimeString()}] ` + Array.from(args).map(arg => {
-                    if (arg instanceof Error) return arg.message + "\n" + arg.stack;
-                    if (typeof arg === 'object') return JSON.stringify(arg);
-                    return String(arg);
-                }).join(' ');
-                logsDiv.appendChild(p);
-                logsDiv.scrollTop = logsDiv.scrollHeight;
-            }
-            
-            // Override console
-            const origLog = console.log;
-            console.log = function() {
-                origLog.apply(console, arguments);
-                appendLog('log', arguments);
-            };
-            const origError = console.error;
-            console.error = function() {
-                origError.apply(console, arguments);
-                appendLog('error', arguments);
-            };
-            
-            window.addEventListener('error', function(e) {
-                appendLog('error', [e.message, 'in', e.filename + ':' + e.lineno]);
-            });
-            window.addEventListener('unhandledrejection', function(e) {
-                appendLog('error', ['Promise Rejection:', e.reason]);
-            });
-            console.log("Console logger initialized successfully. Waiting for App load...");
-        })();
-    </script>
 
     <div class="admin-layout">
 

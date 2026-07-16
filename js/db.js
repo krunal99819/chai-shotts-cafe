@@ -480,15 +480,44 @@ export const db = {
     auth: {
         async login(email, password) {
             if (firebaseInitialized) {
-                const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                // Fetch user role from users collection
-                const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                const userDoc = await getDoc(doc(firestore, 'users', userCredential.user.uid));
-                if (userDoc.exists()) {
-                    return { uid: userCredential.user.uid, email, ...userDoc.data() };
+                const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
+                const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                
+                try {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                    const userDoc = await getDoc(doc(firestore, 'users', userCredential.user.uid));
+                    if (userDoc.exists()) {
+                        return { uid: userCredential.user.uid, email, ...userDoc.data() };
+                    }
+                    const defaultData = { role: email.includes('admin') ? 'admin' : 'staff', name: email.includes('admin') ? 'Admin User' : 'Staff Member' };
+                    await setDoc(doc(firestore, 'users', userCredential.user.uid), defaultData, { merge: true });
+                    return { uid: userCredential.user.uid, email, ...defaultData };
+                } catch (error) {
+                    console.error("Firebase login failed:", error);
+                    
+                    if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential' || error.code === 'auth/invalid-login-credentials') {
+                        if (email === 'admin@chaishotts.com') {
+                            try {
+                                console.log("Creating default admin account in Firebase...");
+                                const newCredential = await createUserWithEmailAndPassword(auth, email, password);
+                                const adminData = { role: 'admin', name: 'Admin User' };
+                                await setDoc(doc(firestore, 'users', newCredential.user.uid), adminData);
+                                return { uid: newCredential.user.uid, email, ...adminData };
+                            } catch (createError) {
+                                console.error("Auto-creation of admin failed:", createError);
+                                if (createError.code === 'auth/operation-not-allowed') {
+                                    throw new Error("Email/Password Sign-in method is disabled in Firebase console. Please go to Firebase Console > Authentication > Sign-in method and enable 'Email/Password'.");
+                                }
+                                throw createError;
+                            }
+                        }
+                    }
+                    
+                    if (error.code === 'auth/operation-not-allowed') {
+                        throw new Error("Email/Password Sign-in method is disabled in Firebase console. Please go to Firebase Console > Authentication > Sign-in method and enable 'Email/Password'.");
+                    }
+                    throw error;
                 }
-                return { uid: userCredential.user.uid, email, role: 'staff', name: 'Staff Member' };
             } else {
                 const users = JSON.parse(localStorage.getItem('cs_users') || '[]');
                 const user = users.find(u => u.email === email && u.password === password);
