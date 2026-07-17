@@ -72,6 +72,7 @@ const elements = {
     prodPopular: document.getElementById('prodPopular'),
     prodAvailable: document.getElementById('prodAvailable'),
     catName: document.getElementById('catName'),
+    adminCategoriesList: document.getElementById('adminCategoriesList'),
     menuCatalogFilter: document.getElementById('menuCatalogFilter'),
     catalogListContainer: document.getElementById('catalogListContainer'),
     toggleGstConfig: document.getElementById('toggleGstConfig'),
@@ -837,12 +838,63 @@ function handleCategoriesUpdate(categories) {
     
     elements.prodCategory.innerHTML = formOptions;
     elements.menuCatalogFilter.innerHTML = catalogOptions;
+    
+    renderAdminCategories();
 }
 
 function handleProductsUpdate(products) {
     allProducts = products;
     renderMenuCatalog();
     updateDashboardMetrics(); // update charts data
+    
+    renderAdminCategories();
+}
+
+function renderAdminCategories() {
+    if (!elements.adminCategoriesList) return;
+    if (allCategories.length === 0) {
+        elements.adminCategoriesList.innerHTML = `<div style="text-align:center; color:var(--color-text-muted); font-size:0.8rem; padding:8px;">No categories found</div>`;
+        return;
+    }
+    
+    let html = "";
+    allCategories.forEach(cat => {
+        const prodCount = allProducts.filter(p => p.categoryId === cat.id).length;
+        html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; border-bottom:1px solid var(--color-border); font-size:0.82rem;">
+                <span style="font-weight:500; color:var(--color-text);">${cat.name} <span style="font-size:0.75rem; color:var(--color-text-muted); font-weight:normal;">(${prodCount} items)</span></span>
+                <button class="btn-delete-category" data-id="${cat.id}" data-name="${cat.name}" data-count="${prodCount}" style="background:transparent; border:none; color:#ff4d4d; cursor:pointer; padding:2px 6px; border-radius:3px; font-size:0.85rem;" title="Delete Category">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+        `;
+    });
+    elements.adminCategoriesList.innerHTML = html;
+    
+    // Bind delete category button listeners
+    elements.adminCategoriesList.querySelectorAll('.btn-delete-category').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const catId = e.currentTarget.dataset.id;
+            const catName = e.currentTarget.dataset.name;
+            const count = parseInt(e.currentTarget.dataset.count);
+            
+            if (count > 0) {
+                const proceed = confirm(`WARNING: The category "${catName}" has ${count} product(s) assigned to it.\n\nDeleting this category will leave these products uncategorized. Are you sure you want to delete it?`);
+                if (!proceed) return;
+            } else {
+                const proceed = confirm(`Are you sure you want to delete the category "${catName}"?`);
+                if (!proceed) return;
+            }
+            
+            try {
+                await db.categories.delete(catId);
+                alert(`Category "${catName}" deleted successfully.`);
+            } catch (err) {
+                console.error(err);
+                alert("Failed to delete category: " + err.message);
+            }
+        });
+    });
 }
 
 function compressImage(base64Str, maxWidth = 400, maxHeight = 400) {
