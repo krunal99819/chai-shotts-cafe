@@ -851,9 +851,11 @@ function handleProductsUpdate(products) {
 }
 
 function renderAdminCategories() {
-    if (!elements.adminCategoriesList) return;
+    const listEl = document.getElementById('adminCategoriesList');
+    if (!listEl) return;
+    
     if (allCategories.length === 0) {
-        elements.adminCategoriesList.innerHTML = `<div style="text-align:center; color:var(--color-text-muted); font-size:0.8rem; padding:8px;">No categories found</div>`;
+        listEl.innerHTML = `<div style="text-align:center; color:var(--color-text-muted); font-size:0.8rem; padding:8px;">No categories found</div>`;
         return;
     }
     
@@ -869,10 +871,10 @@ function renderAdminCategories() {
             </div>
         `;
     });
-    elements.adminCategoriesList.innerHTML = html;
+    listEl.innerHTML = html;
     
     // Bind delete category button listeners
-    elements.adminCategoriesList.querySelectorAll('.btn-delete-category').forEach(btn => {
+    listEl.querySelectorAll('.btn-delete-category').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const catId = e.currentTarget.dataset.id;
             const catName = e.currentTarget.dataset.name;
