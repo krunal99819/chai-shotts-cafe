@@ -845,6 +845,42 @@ function handleProductsUpdate(products) {
     updateDashboardMetrics(); // update charts data
 }
 
+function compressImage(base64Str, maxWidth = 400, maxHeight = 400) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = base64Str;
+        img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > maxWidth) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Export to JPEG with 0.7 quality to keep size tiny
+            resolve(canvas.toDataURL('image/jpeg', 0.7));
+        };
+        img.onerror = () => {
+            resolve(base64Str);
+        };
+    });
+}
+
 function setupMenuEditorActions() {
     // 1. Save Product Submission
     elements.productForm.addEventListener('submit', async (e) => {
@@ -890,7 +926,7 @@ function setupMenuEditorActions() {
             elements.productForm.reset();
         } catch (err) {
             console.error(err);
-            alert("Failed to save product.");
+            alert("Failed to save product: " + err.message);
         }
     });
 
@@ -899,8 +935,16 @@ function setupMenuEditorActions() {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (event) => {
-                uploadedImageBase64 = event.target.result;
+            reader.onload = async (event) => {
+                const rawBase64 = event.target.result;
+                
+                // Show loading status
+                elements.uploadLabelText.textContent = "Compressing Image...";
+                
+                // Compress image to fit Firestore limits and load faster
+                const compressedBase64 = await compressImage(rawBase64, 400, 400);
+                
+                uploadedImageBase64 = compressedBase64;
                 elements.prodImagePreview.src = uploadedImageBase64;
                 elements.prodImagePreviewContainer.style.display = "block";
                 elements.uploadLabelText.textContent = "Selected: " + (file.name.length > 20 ? file.name.slice(0, 17) + "..." : file.name);
