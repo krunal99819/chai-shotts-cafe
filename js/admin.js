@@ -11,6 +11,7 @@ let allProducts = [];
 let selectedSession = null;
 let selectedTable = null;
 let editingProductId = null; // Track product edit state
+let uploadedImageBase64 = ""; // Track base64 data for uploaded product image
 let gstEnabled = false; // Synchronized global GST configuration flag
 
 // Chart instances (to destroy/recreate on data change)
@@ -63,6 +64,11 @@ const elements = {
     prodPrice: document.getElementById('prodPrice'),
     prodDescription: document.getElementById('prodDescription'),
     prodImage: document.getElementById('prodImage'),
+    prodImageFile: document.getElementById('prodImageFile'),
+    prodImagePreviewContainer: document.getElementById('prodImagePreviewContainer'),
+    prodImagePreview: document.getElementById('prodImagePreview'),
+    btnClearUploadedImage: document.getElementById('btnClearUploadedImage'),
+    uploadLabelText: document.getElementById('uploadLabelText'),
     prodPopular: document.getElementById('prodPopular'),
     prodAvailable: document.getElementById('prodAvailable'),
     catName: document.getElementById('catName'),
@@ -848,7 +854,7 @@ function setupMenuEditorActions() {
         const catId = elements.prodCategory.value;
         const price = parseInt(elements.prodPrice.value);
         const desc = elements.prodDescription.value.trim();
-        const img = elements.prodImage.value.trim() || "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=300";
+        const img = uploadedImageBase64 || elements.prodImage.value.trim() || "https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=300";
         const popular = elements.prodPopular.checked;
 
         const productData = {
@@ -873,10 +879,56 @@ function setupMenuEditorActions() {
                 await db.products.add(productData);
                 alert("New product added!");
             }
+            
+            // Reset custom image states
+            uploadedImageBase64 = "";
+            elements.prodImageFile.value = "";
+            elements.uploadLabelText.textContent = "Upload Image from PC";
+            elements.prodImagePreviewContainer.style.display = "none";
+            elements.prodImagePreview.src = "";
+            
             elements.productForm.reset();
         } catch (err) {
             console.error(err);
             alert("Failed to save product.");
+        }
+    });
+
+    // File upload change listener
+    elements.prodImageFile.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                uploadedImageBase64 = event.target.result;
+                elements.prodImagePreview.src = uploadedImageBase64;
+                elements.prodImagePreviewContainer.style.display = "block";
+                elements.uploadLabelText.textContent = "Selected: " + (file.name.length > 20 ? file.name.slice(0, 17) + "..." : file.name);
+                
+                // Clear URL input to avoid conflict
+                elements.prodImage.value = "";
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Clear uploaded image button
+    elements.btnClearUploadedImage.addEventListener('click', () => {
+        uploadedImageBase64 = "";
+        elements.prodImageFile.value = "";
+        elements.uploadLabelText.textContent = "Upload Image from PC";
+        elements.prodImagePreviewContainer.style.display = "none";
+        elements.prodImagePreview.src = "";
+    });
+
+    // Clear file selection if they type a URL instead
+    elements.prodImage.addEventListener('input', () => {
+        if (elements.prodImage.value.trim()) {
+            uploadedImageBase64 = "";
+            elements.prodImageFile.value = "";
+            elements.uploadLabelText.textContent = "Upload Image from PC";
+            elements.prodImagePreviewContainer.style.display = "none";
+            elements.prodImagePreview.src = "";
         }
     });
 
@@ -965,7 +1017,20 @@ function renderMenuCatalog() {
                 elements.prodCategory.value = prod.categoryId;
                 elements.prodPrice.value = prod.price;
                 elements.prodDescription.value = prod.description || "";
-                elements.prodImage.value = prod.image || "";
+                if (prod.image && prod.image.startsWith('data:image/')) {
+                    uploadedImageBase64 = prod.image;
+                    elements.prodImagePreview.src = prod.image;
+                    elements.prodImagePreviewContainer.style.display = "block";
+                    elements.uploadLabelText.textContent = "Change Uploaded Image";
+                    elements.prodImage.value = "";
+                } else {
+                    uploadedImageBase64 = "";
+                    elements.prodImageFile.value = "";
+                    elements.uploadLabelText.textContent = "Upload Image from PC";
+                    elements.prodImagePreviewContainer.style.display = "none";
+                    elements.prodImagePreview.src = "";
+                    elements.prodImage.value = prod.image || "";
+                }
                 elements.prodPopular.checked = prod.isPopular || false;
                 elements.prodAvailable.checked = prod.isAvailable !== false;
                 

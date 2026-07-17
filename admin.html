@@ -286,6 +286,25 @@
                                     <label for="prodImage">Image URL (Optional)</label>
                                     <input type="url" id="prodImage" placeholder="https://unsplash.com/photo-...">
                                 </div>
+                                <div class="form-group" style="margin-top: -5px; margin-bottom: 15px;">
+                                    <div style="font-size: 0.72rem; color: var(--color-text-muted); text-align: center; margin: 4px 0; position: relative;">
+                                        <span style="background: var(--color-card-bg); padding: 0 8px; position: relative; z-index: 1;">OR</span>
+                                        <div style="position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--color-border); z-index: 0;"></div>
+                                    </div>
+                                    <label for="prodImageFile" style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border: 2px dashed var(--color-border); border-radius: var(--radius-md); background: var(--color-bg-pure); font-size: 0.82rem; color: var(--color-primary-deep); transition: all 0.2s;">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                                        <span id="uploadLabelText">Upload Image from PC</span>
+                                    </label>
+                                    <input type="file" id="prodImageFile" accept="image/*" style="display: none;">
+                                    
+                                    <!-- Preview Box -->
+                                    <div id="prodImagePreviewContainer" style="display: none; margin-top: 8px; text-align: center; border: 1px solid var(--color-border); padding: 8px; border-radius: var(--radius-md); background: var(--color-bg-pure);">
+                                        <img id="prodImagePreview" src="" style="max-height: 80px; border-radius: var(--radius-sm); border: 1px solid var(--color-border);">
+                                        <button type="button" id="btnClearUploadedImage" style="display: block; margin: 6px auto 0 auto; background: var(--color-secondary); color: white; border: none; border-radius: var(--radius-sm); padding: 3px 10px; font-size: 0.72rem; cursor: pointer; display: flex; align-items: center; gap: 4px; justify-content: center; width: fit-content;">
+                                            <i class="fa-solid fa-trash-can"></i> Remove File
+                                        </button>
+                                    </div>
+                                </div>
                                 <div class="form-group" style="display:flex; gap:10px; align-items:center; margin-top:10px;">
                                     <input type="checkbox" id="prodPopular" style="width:auto;">
                                     <label for="prodPopular" style="margin-bottom:0; cursor:pointer;">Mark as Chef Special / Popular</label>
