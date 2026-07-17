@@ -938,10 +938,13 @@ function generateInvoicePDF(session, orders) {
     doc.setFont("Inter", "normal");
     doc.setFontSize(8);
     doc.setTextColor(94, 111, 104);
-    doc.text("Shop No. 5, Wood-house Avenue, City", 40, y, { align: "center" });
+    doc.text("Shop no, 27 to 32, harij road, Omvedarkconplex,", 40, y, { align: "center" });
     
     y += 4;
-    doc.text("GSTIN: 27AABCC1234D1Z5", 40, y, { align: "center" });
+    doc.text("sudama circle, Patan, Gujarat 384265", 40, y, { align: "center" });
+    
+    y += 4;
+    doc.text("GSTIN: ", 40, y, { align: "center" });
     
     y += 5;
     doc.setDrawColor(220, 220, 220);
