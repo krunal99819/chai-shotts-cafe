@@ -308,6 +308,19 @@ export const db = {
                 mockDB.listeners.sessions.push(callback);
                 callback(JSON.parse(localStorage.getItem('cs_sessions') || '[]'));
             }
+        async get(id) {
+            if (firebaseInitialized) {
+                const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const docSnap = await getDoc(doc(firestore, 'sessions', id));
+                if (docSnap.exists()) {
+                    return { id: docSnap.id, ...docSnap.data() };
+                }
+                return null;
+            } else {
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const found = sessions.find(s => s.id === id);
+                return found || null;
+            }
         },
         async getActive(tableNumber) {
             tableNumber = parseInt(tableNumber);

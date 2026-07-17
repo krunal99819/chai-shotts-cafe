@@ -101,26 +101,69 @@ if (document.readyState === 'loading') {
 }
 
 async function initApp() {
-    // 1. Parse Table Number from URL
+    // Check if there is an active session stored in LocalStorage for this device/browser
+    const savedSessionId = localStorage.getItem('cs_active_session_id');
+    let sessionRestored = false;
+    
+    if (savedSessionId) {
+        try {
+            const savedSession = await db.sessions.get(savedSessionId);
+            if (savedSession && savedSession.status === 'open') {
+                activeSession = savedSession;
+                tableNumber = savedSession.tableNumber;
+                
+                // Update table indicator
+                if (savedSession.orderZone === 'table') {
+                    elements.tableIndicator.innerHTML = `<i class="fa-solid fa-chair"></i> Table ${tableNumber}`;
+                } else {
+                    elements.tableIndicator.innerHTML = `<i class="fa-solid fa-map-pin"></i> ${savedSession.locationLabel}`;
+                }
+                
+                // Prefill inputs
+                elements.custNameInput.value = savedSession.customerName;
+                elements.custPhoneInput.value = savedSession.customerPhone || "";
+                
+                // Hide registration modal
+                elements.customerInfoModal.classList.remove('open');
+                
+                listenToSessionChanges(savedSession.id);
+                syncRunningBill();
+                sessionRestored = true;
+            } else {
+                localStorage.removeItem('cs_active_session_id');
+            }
+        } catch (e) {
+            console.error("Error restoring saved session:", e);
+            localStorage.removeItem('cs_active_session_id');
+        }
+    }
+    
+    // Parse Table Number from URL
     const urlParams = new URLSearchParams(window.location.search);
     const tableParam = urlParams.get('table');
     
-    if (tableParam) {
-        tableNumber = parseInt(tableParam);
-        elements.tableIndicator.innerHTML = `<i class="fa-solid fa-chair"></i> Table ${tableNumber}`;
-        
-        // Prefill and hide table input
-        elements.custTableInput.value = tableNumber;
-        elements.tableInputGroup.style.display = 'none';
-        elements.orderZoneSelect.value = 'table';
-        elements.orderZoneSelect.disabled = true; // Lock zone to inside table
-        
-        // 2. Check for active session
-        await checkActiveSession();
+    if (!sessionRestored) {
+        if (tableParam) {
+            tableNumber = parseInt(tableParam);
+            elements.tableIndicator.innerHTML = `<i class="fa-solid fa-chair"></i> Table ${tableNumber}`;
+            
+            // Prefill and hide table input
+            elements.custTableInput.value = tableNumber;
+            elements.tableInputGroup.style.display = 'none';
+            elements.orderZoneSelect.value = 'table';
+            elements.orderZoneSelect.disabled = true; // Lock zone to inside table
+            
+            // Check for active session
+            await checkActiveSession();
+        } else {
+            // No table specified -> Display unified modal asking for Table number
+            elements.tableInputGroup.style.display = 'block';
+            elements.customerInfoModal.classList.add('open');
+        }
     } else {
-        // No table specified -> Display unified modal asking for Table number
-        elements.tableInputGroup.style.display = 'block';
-        elements.customerInfoModal.classList.add('open');
+        if (tableNumber) {
+            elements.custTableInput.value = tableNumber;
+        }
     }
     
     // 3. Load Menu Data (Categories & Products)
@@ -311,6 +354,7 @@ async function handleCreateSession() {
             // Rejoining own session if name matches
             if (activeLocationSess.customerName.toLowerCase() === name.toLowerCase()) {
                 activeSession = activeLocationSess;
+                localStorage.setItem('cs_active_session_id', activeLocationSess.id);
                 elements.customerInfoModal.classList.remove('open');
                 listenToSessionChanges(activeLocationSess.id);
                 syncRunningBill();
@@ -321,6 +365,7 @@ async function handleCreateSession() {
                 const join = confirm(`${locationLabel} already has an active ordering session started by ${activeLocationSess.customerName}.\n\nWould you like to join their group and order together on the same bill?`);
                 if (join) {
                     activeSession = activeLocationSess;
+                    localStorage.setItem('cs_active_session_id', activeLocationSess.id);
                     elements.customerInfoModal.classList.remove('open');
                     listenToSessionChanges(activeLocationSess.id);
                     syncRunningBill();
@@ -342,6 +387,7 @@ async function handleCreateSession() {
 
         const session = await db.sessions.create(localTableNum, name, phone, locationLabel, zone);
         activeSession = session;
+        localStorage.setItem('cs_active_session_id', session.id);
         elements.customerInfoModal.classList.remove('open');
         listenToSessionChanges(session.id);
         alert(`Welcome, ${name}! Your ordering session is active for ${locationLabel}.`);
@@ -383,6 +429,7 @@ function handleSessionUpdate(session) {
     
     // If table session is marked paid/closed, close it out locally
     if (session.status === 'paid') {
+        localStorage.removeItem('cs_active_session_id');
         elements.paymentModal.classList.remove('open');
         elements.billOptionsModal.classList.remove('open');
         
