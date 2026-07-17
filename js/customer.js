@@ -107,7 +107,7 @@ async function initApp() {
     
     if (savedSessionId) {
         try {
-            const savedSession = await db.sessions.get(savedSessionId);
+            const savedSession = await db.sessions.getSession(savedSessionId);
             if (savedSession && savedSession.status === 'open') {
                 activeSession = savedSession;
                 tableNumber = savedSession.tableNumber;

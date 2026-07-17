@@ -309,7 +309,7 @@ export const db = {
                 callback(JSON.parse(localStorage.getItem('cs_sessions') || '[]'));
             }
         },
-        async get(id) {
+        getSession: async function(id) {
             if (firebaseInitialized) {
                 const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 const docSnap = await getDoc(doc(firestore, 'sessions', id));
