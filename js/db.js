@@ -308,6 +308,7 @@ export const db = {
                 mockDB.listeners.sessions.push(callback);
                 callback(JSON.parse(localStorage.getItem('cs_sessions') || '[]'));
             }
+        },
         async get(id) {
             if (firebaseInitialized) {
                 const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
