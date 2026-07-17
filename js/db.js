@@ -243,7 +243,7 @@ export const db = {
             order.createdAt = Date.now();
             order.status = "received";
             if (firebaseInitialized) {
-                const { collection, addDoc, doc, updateDoc, arrayUnion } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const { collection, addDoc, doc, updateDoc, arrayUnion, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 const docRef = await addDoc(collection(firestore, 'orders'), order);
                 // Also update the session
                 if (order.sessionId) {
