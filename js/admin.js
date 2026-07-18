@@ -12,6 +12,8 @@ let selectedSession = null;
 let selectedTable = null;
 let editingProductId = null; // Track product edit state
 let activeBillingSessionId = null; // Track active session ID in billing manager modal
+let initialOrdersLoaded = false; // Track if orders list has completed its initial database read
+let knownOrderIds = new Set(); // Keep track of seen order IDs to prevent duplicate alerts
 let uploadedImageBase64 = ""; // Track base64 data for uploaded product image
 let gstEnabled = false; // Synchronized global GST configuration flag
 
@@ -242,7 +244,34 @@ function handleSessionsUpdate(sessions) {
 }
 
 function handleOrdersUpdate(orders) {
+    if (!initialOrdersLoaded) {
+        orders.forEach(o => knownOrderIds.add(o.id));
+        initialOrdersLoaded = true;
+        allOrders = orders;
+        updateDashboardMetrics();
+        renderLiveOrdersQueue();
+        if (selectedSession) {
+            loadCheckoutDrawer(selectedSession);
+        }
+        if (currentTab === 'tabBills') {
+            renderBillHistory();
+        }
+        return;
+    }
+    
+    const newOrders = orders.filter(o => !knownOrderIds.has(o.id));
+    orders.forEach(o => knownOrderIds.add(o.id));
+    
     allOrders = orders;
+    
+    if (newOrders.length > 0) {
+        const receivedNewOrders = newOrders.filter(o => o.status === 'received');
+        if (receivedNewOrders.length > 0) {
+            playNewOrderSound();
+            showNewOrderToast(receivedNewOrders[0]);
+        }
+    }
+    
     updateDashboardMetrics();
     renderLiveOrdersQueue();
     if (selectedSession) {
@@ -252,6 +281,81 @@ function handleOrdersUpdate(orders) {
     if (currentTab === 'tabBills') {
         renderBillHistory();
     }
+}
+
+function playNewOrderSound() {
+    try {
+        // 1. Play warm double-bell order chime from audio context
+        if (soundEffects && typeof soundEffects.playOrder === 'function') {
+            soundEffects.playOrder();
+        }
+        
+        // 2. Play speech synthesis voice alert
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Terminate previous alerts to prevent piling up
+            
+            const utterance = new SpeechSynthesisUtterance("New order, please check");
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+            
+            // Query for English voice locale if supported
+            const voices = window.speechSynthesis.getVoices();
+            const englishVoice = voices.find(v => v.lang.startsWith('en'));
+            if (englishVoice) {
+                utterance.voice = englishVoice;
+            }
+            
+            window.speechSynthesis.speak(utterance);
+        }
+    } catch (e) {
+        console.error("Notification sound playback error:", e);
+    }
+}
+
+function showNewOrderToast(order) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    
+    const locLabel = order.locationLabel || (order.tableNumber ? `Table ${order.tableNumber}` : "New Order");
+    const custName = order.customerName || "Guest";
+    const itemsCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const itemsList = order.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast-card';
+    
+    toast.innerHTML = `
+        <div style="font-weight:bold; font-size:0.95rem; display:flex; align-items:center; justify-content:space-between; width:100%;">
+            <span style="display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-bell-concierge" style="color:var(--color-accent-gold-dark);"></i>
+                New Order: ${locLabel}
+            </span>
+            <button class="btn-close-toast" style="background:none; border:none; color:var(--color-text-muted); cursor:pointer; font-size:1.1rem; padding:0; line-height:1;" onclick="this.parentElement.parentElement.remove()">&times;</button>
+        </div>
+        <div style="font-size:0.8rem; color:var(--color-primary-deep); font-weight:600; margin-top:6px;">
+            Customer: ${custName}
+        </div>
+        <div style="font-size:0.78rem; color:var(--color-text-muted); margin-top:4px; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${itemsList}">
+            Ordered ${itemsCount} items: ${itemsList}
+        </div>
+        <div style="margin-top:10px; display:flex; justify-content:flex-end;">
+            <button class="btn-primary" style="padding:4px 8px; font-size:0.75rem; border-radius:4px; background-color:var(--color-primary-deep); border-color:var(--color-primary-deep); color:white;" onclick="this.parentElement.parentElement.remove()">Dismiss</button>
+        </div>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove after 6 seconds with fade-out
+    setTimeout(() => {
+        if (toast && toast.parentElement) {
+            toast.style.animation = "toastFadeOut 0.5s ease forwards";
+            setTimeout(() => {
+                if (toast && toast.parentElement) {
+                    toast.remove();
+                }
+            }, 500);
+        }
+    }, 6000);
 }
 
 let unresolvedRequestCount = 0;
