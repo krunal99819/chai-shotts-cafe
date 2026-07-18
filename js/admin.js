@@ -11,6 +11,7 @@ let allProducts = [];
 let selectedSession = null;
 let selectedTable = null;
 let editingProductId = null; // Track product edit state
+let activeBillingSessionId = null; // Track active session ID in billing manager modal
 let uploadedImageBase64 = ""; // Track base64 data for uploaded product image
 let gstEnabled = false; // Synchronized global GST configuration flag
 
@@ -79,7 +80,30 @@ const elements = {
     
     // QR Manager
     qrHostUrl: document.getElementById('qrHostUrl'),
-    qrPrintGrid: document.getElementById('qrPrintGrid')
+    qrPrintGrid: document.getElementById('qrPrintGrid'),
+    
+    // Bill History & Manager DOM
+    billSearchInput: document.getElementById('billSearchInput'),
+    billStatusFilter: document.getElementById('billStatusFilter'),
+    billHistoryTableBody: document.getElementById('billHistoryTableBody'),
+    analyticsFilter: document.getElementById('analyticsFilter'),
+    
+    // Bill Detail Modal
+    billDetailModal: document.getElementById('billDetailModal'),
+    billModalTitle: document.getElementById('billModalTitle'),
+    btnMinimizeBillModal: document.getElementById('btnMinimizeBillModal'),
+    billCustomerEditSection: document.getElementById('billCustomerEditSection'),
+    billEditCustName: document.getElementById('billEditCustName'),
+    billEditCustPhone: document.getElementById('billEditCustPhone'),
+    btnSaveBillCustomerDetails: document.getElementById('btnSaveBillCustomerDetails'),
+    billModalItemsContainer: document.getElementById('billModalItemsContainer'),
+    billAddItemSection: document.getElementById('billAddItemSection'),
+    billAddProductSelect: document.getElementById('billAddProductSelect'),
+    billAddProductQty: document.getElementById('billAddProductQty'),
+    btnConfirmBillAddItem: document.getElementById('btnConfirmBillAddItem'),
+    billModalGrandTotal: document.getElementById('billModalGrandTotal'),
+    btnPrintReceiptFromModal: document.getElementById('btnPrintReceiptFromModal'),
+    btnCloseBillModal: document.getElementById('btnCloseBillModal')
 };
 
 // ==========================================================================
@@ -138,6 +162,7 @@ function initAdminPanel() {
     // 4. Bind Action Listeners
     setupCheckoutActions();
     setupMenuEditorActions();
+    bindBillManagerEvents();
 
     // 5. Logout Button
     elements.btnAdminLogout.addEventListener('click', async () => {
@@ -185,6 +210,8 @@ function setupNavigation() {
             // Re-render graphs if entering Analytics tab
             if (targetTab === 'tabAnalytics') {
                 renderAnalyticsCharts();
+            } else if (targetTab === 'tabBills') {
+                renderBillHistory();
             }
         });
     });
@@ -208,6 +235,10 @@ function handleSessionsUpdate(sessions) {
             resetCheckoutPanel();
         }
     }
+    
+    if (currentTab === 'tabBills') {
+        renderBillHistory();
+    }
 }
 
 function handleOrdersUpdate(orders) {
@@ -216,6 +247,10 @@ function handleOrdersUpdate(orders) {
     renderLiveOrdersQueue();
     if (selectedSession) {
         loadCheckoutDrawer(selectedSession);
+    }
+    
+    if (currentTab === 'tabBills') {
+        renderBillHistory();
     }
 }
 
@@ -1150,12 +1185,366 @@ function renderMenuCatalog() {
     });
 }
 
+}
+
+// ==========================================================================
+// 7.5 BILL MANAGER & HISTORY
+// ==========================================================================
+
+function bindBillManagerEvents() {
+    // 1. Search and status filters
+    elements.billSearchInput.addEventListener('input', () => {
+        renderBillHistory();
+    });
+    
+    elements.billStatusFilter.addEventListener('change', () => {
+        renderBillHistory();
+    });
+
+    // 2. Modal Close / Minimize
+    elements.btnMinimizeBillModal.addEventListener('click', closeBillModal);
+    elements.btnCloseBillModal.addEventListener('click', closeBillModal);
+    
+    // Close modal when clicking outside modal box
+    elements.billDetailModal.addEventListener('click', (e) => {
+        if (e.target === elements.billDetailModal) closeBillModal();
+    });
+
+    // 3. Save Customer details
+    elements.btnSaveBillCustomerDetails.addEventListener('click', async () => {
+        if (!activeBillingSessionId) return;
+        const name = elements.billEditCustName.value.trim();
+        const phone = elements.billEditCustPhone.value.trim();
+        if (!name) {
+            alert("Customer Name is required.");
+            return;
+        }
+        try {
+            await db.sessions.updateDetails(activeBillingSessionId, name, phone);
+            alert("Customer details updated successfully!");
+            
+            // Reload running details
+            const sessions = await new Promise(resolve => db.sessions.listen(resolve));
+            const updated = sessions.find(s => s.id === activeBillingSessionId);
+            if (updated) openBillModal(updated.id);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to update customer details.");
+        }
+    });
+
+    // 4. Add item to running bill
+    elements.btnConfirmBillAddItem.addEventListener('click', async () => {
+        if (!activeBillingSessionId) return;
+        const pId = elements.billAddProductSelect.value;
+        const qty = parseInt(elements.billAddProductQty.value);
+        if (!pId) {
+            alert("Please select a product to add.");
+            return;
+        }
+        if (!qty || qty < 1) {
+            alert("Please specify a valid quantity.");
+            return;
+        }
+
+        const product = allProducts.find(p => p.id === pId);
+        const sessions = await new Promise(resolve => db.sessions.listen(resolve));
+        const session = sessions.find(s => s.id === activeBillingSessionId);
+        
+        if (!product || !session) return;
+
+        const newOrder = {
+            sessionId: session.id,
+            tableNumber: session.tableNumber,
+            customerName: session.customerName,
+            status: "served", // Auto-served
+            items: [
+                {
+                    productId: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: qty
+                }
+            ],
+            totalAmount: product.price * qty
+        };
+
+        try {
+            await db.orders.add(newOrder);
+            alert(`Added ${qty}x ${product.name} to the bill.`);
+            elements.billAddProductQty.value = 1;
+            
+            // Reload details
+            openBillModal(session.id);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to add item: " + e.message);
+        }
+    });
+
+    // 5. Print Receipt from modal
+    elements.btnPrintReceiptFromModal.addEventListener('click', () => {
+        if (!activeBillingSessionId) return;
+        const sessions = allSessions;
+        const session = sessions.find(s => s.id === activeBillingSessionId);
+        if (!session) return;
+        const sessionOrders = allOrders.filter(o => o.sessionId === session.id && o.status !== 'cancelled');
+        reprintPOSInvoice(session, sessionOrders);
+    });
+
+    // 6. Analytics filter event listener
+    elements.analyticsFilter.addEventListener('change', () => {
+        renderAnalyticsCharts();
+    });
+}
+
+function renderBillHistory() {
+    if (!elements.billHistoryTableBody) return;
+    
+    const query = elements.billSearchInput.value.toLowerCase().trim();
+    const statusFilter = elements.billStatusFilter.value; // 'all', 'open', 'paid'
+    
+    // Filter active + past sessions
+    let filtered = allSessions.filter(s => s.status === 'open' || s.status === 'paid');
+    
+    if (statusFilter !== 'all') {
+        filtered = filtered.filter(s => s.status === statusFilter);
+    }
+    
+    if (query) {
+        filtered = filtered.filter(s => {
+            const name = (s.customerName || "").toLowerCase();
+            const phone = (s.customerPhone || "").toLowerCase();
+            const loc = (s.locationLabel || "table " + s.tableNumber).toLowerCase();
+            return name.includes(query) || phone.includes(query) || loc.includes(query);
+        });
+    }
+    
+    // Sort by Date (newest first)
+    filtered.sort((a, b) => b.createdAt - a.createdAt);
+    
+    if (filtered.length === 0) {
+        elements.billHistoryTableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align:center; padding:20px; color:var(--color-text-muted);">
+                    No bills found matching your criteria.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    let html = "";
+    filtered.forEach(session => {
+        const dateStr = new Date(session.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+        const locLabel = session.locationLabel || `Table ${session.tableNumber}`;
+        const total = session.totalAmount;
+        const tax = gstEnabled ? Math.round(total * 0.05) : 0;
+        const grandTotal = total + tax;
+        
+        let statusBadge = "";
+        let actionBtn = "";
+        
+        if (session.status === 'open') {
+            statusBadge = `<span class="badge badge-danger">Running (Open)</span>`;
+            actionBtn = `<button class="btn-primary btn-view-bill-detail" data-id="${session.id}" style="padding: 6px 12px; font-size:0.75rem;"><i class="fa-solid fa-edit"></i> View & Edit</button>`;
+        } else {
+            statusBadge = `<span class="badge badge-success">Checked Out (Paid)</span>`;
+            actionBtn = `<button class="btn-secondary btn-view-bill-detail" data-id="${session.id}" style="padding: 6px 12px; font-size:0.75rem;"><i class="fa-solid fa-receipt"></i> View Receipt</button>`;
+        }
+        
+        html += `
+            <tr style="border-bottom:1px solid var(--color-border);">
+                <td style="padding:10px;">${dateStr}</td>
+                <td style="padding:10px; font-weight:bold;">${locLabel}</td>
+                <td style="padding:10px;">${session.customerName}</td>
+                <td style="padding:10px;">${session.customerPhone || "N/A"}</td>
+                <td style="padding:10px;">${statusBadge}</td>
+                <td style="padding:10px; text-align:right; font-weight:bold; font-family:var(--font-heading);">₹${grandTotal}</td>
+                <td style="padding:10px; text-align:center;">${actionBtn}</td>
+            </tr>
+        `;
+    });
+    
+    elements.billHistoryTableBody.innerHTML = html;
+    
+    // Bind click actions to view details
+    elements.billHistoryTableBody.querySelectorAll('.btn-view-bill-detail').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const sId = e.currentTarget.dataset.id;
+            openBillModal(sId);
+        });
+    });
+}
+
+async function openBillModal(sessionId) {
+    activeBillingSessionId = sessionId;
+    
+    const sessions = allSessions;
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    
+    const locLabel = session.locationLabel || `Table ${session.tableNumber}`;
+    elements.billModalTitle.innerText = `${locLabel} Billing Session`;
+    
+    // Prefill customer name and phone
+    elements.billEditCustName.value = session.customerName;
+    elements.billEditCustPhone.value = session.customerPhone || "";
+    
+    // Retrieve all orders associated with this session (excluding cancelled ones)
+    const sessionOrders = allOrders.filter(o => o.sessionId === session.id && o.status !== 'cancelled');
+    
+    // Consolidate ordered items
+    const consolidatedItems = {};
+    sessionOrders.forEach(order => {
+        order.items.forEach(item => {
+            if (!consolidatedItems[item.productId]) {
+                consolidatedItems[item.productId] = { name: item.name, qty: 0, price: item.price };
+            }
+            consolidatedItems[item.productId].qty += item.quantity;
+        });
+    });
+    
+    const keys = Object.keys(consolidatedItems);
+    let itemsHtml = "";
+    
+    if (keys.length === 0) {
+        itemsHtml = `<div style="text-align:center; padding:15px; font-size:0.85rem; color:var(--color-text-muted);">No items ordered yet.</div>`;
+    } else {
+        keys.forEach(pId => {
+            const item = consolidatedItems[pId];
+            if (session.status === 'open') {
+                // Editable row for open running bills
+                itemsHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; margin-bottom:8px; border-bottom:1px solid #f5f5f5; padding-bottom:6px;">
+                        <span>
+                            <button class="btn-modal-delete-item" data-prod-id="${pId}" style="background:none; border:none; color:#dc3545; padding:0; margin-right:8px; cursor:pointer;" title="Remove item">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                            ${item.name}
+                        </span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="number" class="modal-qty-input" data-prod-id="${pId}" value="${item.qty}" min="1" max="100" style="width:50px; padding:3px; font-size:0.8rem; text-align:center;">
+                            <span style="font-weight:bold; font-family:var(--font-heading); min-width:55px; text-align:right;">₹${item.qty * item.price}</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Static read-only row for closed bills
+                itemsHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid #f9f9f9;">
+                        <span>${item.name} <strong style="color:var(--color-primary-deep)">x${item.qty}</strong></span>
+                        <span style="font-weight:bold; font-family:var(--font-heading);">₹${item.qty * item.price}</span>
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    elements.billModalItemsContainer.innerHTML = itemsHtml;
+    
+    // Bind change quantity input listeners
+    if (session.status === 'open') {
+        elements.billModalItemsContainer.querySelectorAll('.modal-qty-input').forEach(input => {
+            input.addEventListener('change', async (e) => {
+                const pId = e.target.dataset.prodId;
+                const newQty = parseInt(e.target.value);
+                if (newQty && newQty >= 1) {
+                    try {
+                        await db.sessions.updateItemQuantity(session.id, pId, newQty);
+                        openBillModal(session.id); // Reload details
+                    } catch (err) {
+                        console.error(err);
+                        alert("Failed to update item quantity.");
+                    }
+                }
+            });
+        });
+        
+        // Bind item deletion listeners
+        elements.billModalItemsContainer.querySelectorAll('.btn-modal-delete-item').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const pId = e.currentTarget.dataset.prodId;
+                const item = consolidatedItems[pId];
+                if (confirm(`Remove "${item.name}" entirely from this table bill?`)) {
+                    try {
+                        await db.sessions.deleteItem(session.id, pId);
+                        openBillModal(session.id); // Reload details
+                    } catch (err) {
+                        console.error(err);
+                        alert("Failed to delete item.");
+                    }
+                }
+            });
+        });
+    }
+    
+    // Configure inputs visibility based on status
+    if (session.status === 'open') {
+        elements.billEditCustName.disabled = false;
+        elements.billEditCustPhone.disabled = false;
+        elements.billCustomerEditSection.style.display = "block";
+        elements.billAddItemSection.style.display = "block";
+        
+        // Load product select list options
+        let selectHtml = `<option value="">-- Choose Menu Item --</option>`;
+        allProducts.forEach(prod => {
+            if (prod.isAvailable) {
+                selectHtml += `<option value="${prod.id}">${prod.name} (₹${prod.price})</option>`;
+            }
+        });
+        elements.billAddProductSelect.innerHTML = selectHtml;
+    } else {
+        // Read-only mode for closed bills
+        elements.billEditCustName.disabled = true;
+        elements.billEditCustPhone.disabled = true;
+        elements.billCustomerEditSection.style.display = "none";
+        elements.billAddItemSection.style.display = "none";
+    }
+    
+    // Calculate total & taxes
+    const total = session.totalAmount;
+    const tax = gstEnabled ? Math.round(total * 0.05) : 0;
+    const grandTotal = total + tax;
+    elements.billModalGrandTotal.innerText = `₹${grandTotal}`;
+    
+    // Show Modal
+    elements.billDetailModal.classList.add('open');
+}
+
+function closeBillModal() {
+    elements.billDetailModal.classList.remove('open');
+    activeBillingSessionId = null;
+}
+
 // ==========================================================================
 // 8. SALES ANALYTICS (Chart.js Integration)
 // ==========================================================================
 
 function renderAnalyticsCharts() {
-    const paidSessions = allSessions.filter(s => s.status === 'paid');
+    const period = elements.analyticsFilter ? elements.analyticsFilter.value : "7days";
+    
+    // Calculate timestamps
+    const now = Date.now();
+    let threshold = 0;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const startOfToday = today.getTime();
+    
+    if (period === 'today') {
+        threshold = startOfToday;
+    } else if (period === '7days') {
+        threshold = now - (7 * 24 * 60 * 60 * 1000);
+    } else if (period === '30days') {
+        threshold = now - (30 * 24 * 60 * 60 * 1000);
+    } else if (period === '90days') {
+        threshold = now - (90 * 24 * 60 * 60 * 1000);
+    } else if (period === '180days') {
+        threshold = now - (180 * 24 * 60 * 60 * 1000);
+    }
+    
+    const paidSessions = allSessions.filter(s => s.status === 'paid' && s.closedAt >= threshold);
+    const ordersFiltered = allOrders.filter(o => o.status === 'served' && o.createdAt >= threshold);
     
     // Destroy existing instances to clean up canvases
     if (trafficChartInstance) trafficChartInstance.destroy();
@@ -1201,7 +1590,7 @@ function renderAnalyticsCharts() {
 
     // Chart 2: Top Selling Menu Items
     const productSales = {};
-    allOrders.filter(o => o.status === 'served').forEach(o => {
+    ordersFiltered.forEach(o => {
         o.items.forEach(item => {
             if (!productSales[item.name]) productSales[item.name] = 0;
             productSales[item.name] += item.quantity;
@@ -1232,23 +1621,79 @@ function renderAnalyticsCharts() {
         }
     });
 
-    // Chart 3: Daily Revenue Performance (Last 7 Days)
-    const dailyRev = {};
-    for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dailyRev[d.toDateString()] = { label: d.toLocaleDateString([], {weekday: 'short', day: 'numeric'}), val: 0 };
-    }
-
-    paidSessions.forEach(s => {
-        const dateStr = new Date(s.closedAt).toDateString();
-        if (dailyRev[dateStr]) {
-            dailyRev[dateStr].val += s.totalAmount;
+    // Chart 3: Revenue Performance (Dynamic labels / groupings)
+    let revenueLabels = [];
+    let revenueData = [];
+    
+    if (period === 'today') {
+        const hourlyRev = Array(24).fill(0);
+        paidSessions.forEach(s => {
+            const hr = new Date(s.closedAt).getHours();
+            hourlyRev[hr] += s.totalAmount;
+        });
+        for (let h = 9; h <= 23; h++) {
+            const label = h > 12 ? `${h-12} PM` : h === 12 ? '12 PM' : `${h} AM`;
+            revenueLabels.push(label);
+            revenueData.push(hourlyRev[h]);
         }
-    });
-
-    const revenueLabels = Object.values(dailyRev).map(item => item.label);
-    const revenueData = Object.values(dailyRev).map(item => item.val);
+    } else if (period === '7days') {
+        const dailyRev = {};
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            dailyRev[d.toDateString()] = { label: d.toLocaleDateString([], {weekday: 'short', day: 'numeric'}), val: 0 };
+        }
+        paidSessions.forEach(s => {
+            const dateStr = new Date(s.closedAt).toDateString();
+            if (dailyRev[dateStr]) dailyRev[dateStr].val += s.totalAmount;
+        });
+        revenueLabels = Object.values(dailyRev).map(item => item.label);
+        revenueData = Object.values(dailyRev).map(item => item.val);
+    } else if (period === '30days') {
+        const dailyRev = {};
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            dailyRev[d.toDateString()] = { label: d.toLocaleDateString([], {day: 'numeric', month: 'short'}), val: 0 };
+        }
+        paidSessions.forEach(s => {
+            const dateStr = new Date(s.closedAt).toDateString();
+            if (dailyRev[dateStr]) dailyRev[dateStr].val += s.totalAmount;
+        });
+        revenueLabels = Object.values(dailyRev).map(item => item.label);
+        revenueData = Object.values(dailyRev).map(item => item.val);
+    } else if (period === '90days') {
+        const weeklyRev = {};
+        for (let i = 11; i >= 0; i--) {
+            const start = now - ((i + 1) * 7 * 24 * 60 * 60 * 1000);
+            weeklyRev[i] = { label: `Wk -${i}`, val: 0, start, end: start + (7 * 24 * 60 * 60 * 1000) };
+        }
+        paidSessions.forEach(s => {
+            for (let i = 0; i < 12; i++) {
+                if (s.closedAt >= weeklyRev[i].start && s.closedAt < weeklyRev[i].end) {
+                    weeklyRev[i].val += s.totalAmount;
+                    break;
+                }
+            }
+        });
+        revenueLabels = Object.values(weeklyRev).map(item => item.label);
+        revenueData = Object.values(weeklyRev).map(item => item.val);
+    } else if (period === '180days') {
+        const monthlyRev = {};
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            monthlyRev[d.getMonth()] = { label: d.toLocaleDateString([], {month: 'long'}), val: 0 };
+        }
+        paidSessions.forEach(s => {
+            const m = new Date(s.closedAt).getMonth();
+            if (monthlyRev[m] !== undefined) {
+                monthlyRev[m].val += s.totalAmount;
+            }
+        });
+        revenueLabels = Object.values(monthlyRev).map(item => item.label);
+        revenueData = Object.values(monthlyRev).map(item => item.val);
+    }
 
     const revenueCtx = document.getElementById('revenueChart').getContext('2d');
     revenueChartInstance = new Chart(revenueCtx, {

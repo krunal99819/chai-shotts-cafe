@@ -435,6 +435,91 @@ export const db = {
                     mockDB.trigger('sessions', sessions);
                 }
             }
+        },
+        async updateItemQuantity(sessionId, productId, newQty) {
+            newQty = parseInt(newQty);
+            if (newQty <= 0) {
+                await this.deleteItem(sessionId, productId);
+                return;
+            }
+            if (firebaseInitialized) {
+                const { collection, getDocs, doc, updateDoc, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const q = query(collection(firestore, 'orders'), where('sessionId', '==', sessionId));
+                const snapshot = await getDocs(q);
+                
+                let newTotalAmount = 0;
+                let quantityUpdated = false;
+                
+                for (const d of snapshot.docs) {
+                    const orderData = d.data();
+                    let updated = false;
+                    const items = orderData.items.map(item => {
+                        if (item.productId === productId && !quantityUpdated) {
+                            item.quantity = newQty;
+                            updated = true;
+                            quantityUpdated = true;
+                        }
+                        return item;
+                    });
+                    
+                    if (updated) {
+                        await updateDoc(doc(firestore, 'orders', d.id), { items });
+                    }
+                    if (orderData.status !== 'cancelled') {
+                        newTotalAmount += items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                    }
+                }
+                
+                await updateDoc(doc(firestore, 'sessions', sessionId), { totalAmount: newTotalAmount });
+            } else {
+                const orders = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                let newTotalAmount = 0;
+                let quantityUpdated = false;
+                
+                orders.forEach(o => {
+                    if (o.sessionId === sessionId) {
+                        o.items = o.items.map(item => {
+                            if (item.productId === productId && !quantityUpdated) {
+                                item.quantity = newQty;
+                                quantityUpdated = true;
+                            }
+                            return item;
+                        });
+                        if (o.status !== 'cancelled') {
+                            newTotalAmount += o.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                        }
+                    }
+                });
+                
+                localStorage.setItem('cs_orders', JSON.stringify(orders));
+                mockDB.trigger('orders', orders);
+
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const idx = sessions.findIndex(s => s.id === sessionId);
+                if (idx !== -1) {
+                    sessions[idx].totalAmount = newTotalAmount;
+                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    mockDB.trigger('sessions', sessions);
+                }
+            }
+        },
+        async updateDetails(sessionId, customerName, customerPhone) {
+            if (firebaseInitialized) {
+                const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                await updateDoc(doc(firestore, 'sessions', sessionId), {
+                    customerName,
+                    customerPhone
+                });
+            } else {
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const idx = sessions.findIndex(s => s.id === sessionId);
+                if (idx !== -1) {
+                    sessions[idx].customerName = customerName;
+                    sessions[idx].customerPhone = customerPhone;
+                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    mockDB.trigger('sessions', sessions);
+                }
+            }
         }
     },
 
