@@ -215,6 +215,14 @@ function initAdminPanel() {
     // 6. Generate Printable QRs
     generateTableQRSheets();
     elements.qrHostUrl.addEventListener('input', generateTableQRSheets);
+
+    // 7. Bind Test Voice button
+    const btnTestVoice = document.getElementById('btnTestVoice');
+    if (btnTestVoice) {
+        btnTestVoice.addEventListener('click', () => {
+            playNewOrderSound();
+        });
+    }
 }
 
 function startClock() {
