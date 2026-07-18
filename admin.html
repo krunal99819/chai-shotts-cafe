@@ -387,6 +387,27 @@
                             <canvas id="revenueChart"></canvas>
                         </div>
                     </div>
+
+                    <!-- Product-wise Sales Table -->
+                    <div class="chart-container" style="margin-top: 28px;">
+                        <h3 style="font-size: 1rem; margin-bottom: 16px; color: var(--color-primary-deep);"><i class="fa-solid fa-list-ol"></i> Product-Wise Sales Performance</h3>
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%; border-collapse:collapse; font-size:0.88rem; text-align:left;">
+                                <thead>
+                                    <tr style="border-bottom:2px solid var(--color-border); color:var(--color-primary-deep); font-weight:bold; background: rgba(12,43,32,0.03);">
+                                        <th style="padding:12px 10px;">Product Name</th>
+                                        <th style="padding:12px 10px;">Category</th>
+                                        <th style="padding:12px 10px; text-align:center;">Units Sold</th>
+                                        <th style="padding:12px 10px; text-align:right;">Price</th>
+                                        <th style="padding:12px 10px; text-align:right;">Total Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="productSalesTableBody">
+                                    <!-- Loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- BILL MANAGER & HISTORY PANEL -->
@@ -515,6 +536,6 @@
     </div>
 
     <!-- Application Script -->
-    <script type="module" src="js/admin.js"></script>
+    <script type="module" src="js/admin.js?v=3"></script>
 </body>
 </html>
