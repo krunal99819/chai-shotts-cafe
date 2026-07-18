@@ -1822,7 +1822,6 @@ function renderAnalyticsCharts() {
         productTableBody.innerHTML = tableHtml;
     }
 }
-}
 
 // ==========================================================================
 // 9. QR CODE MANAGER
