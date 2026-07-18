@@ -16,6 +16,7 @@ let initialOrdersLoaded = false; // Track if orders list has completed its initi
 let knownOrderIds = new Set(); // Keep track of seen order IDs to prevent duplicate alerts
 let uploadedImageBase64 = ""; // Track base64 data for uploaded product image
 let gstEnabled = false; // Synchronized global GST configuration flag
+let speechVoices = []; // Cache Speech Synthesis voices once loaded
 
 // Chart instances (to destroy/recreate on data change)
 let trafficChartInstance = null;
@@ -135,6 +136,43 @@ if (document.readyState === 'loading') {
 }
 
 function initAdminPanel() {
+    // 0. Cache Speech Synthesis Voices & Pre-unlock Audio/Speech engine on first user gesture
+    if ('speechSynthesis' in window) {
+        speechVoices = window.speechSynthesis.getVoices();
+        window.speechSynthesis.onvoiceschanged = () => {
+            speechVoices = window.speechSynthesis.getVoices();
+        };
+        
+        const unlockAudioAndSpeech = () => {
+            try {
+                // Speak a silent empty string to bypass Chrome's user interaction restriction
+                const utterance = new SpeechSynthesisUtterance("");
+                utterance.volume = 0;
+                window.speechSynthesis.speak(utterance);
+            } catch (e) {}
+            
+            // Also attempt to wake up any suspended Web Audio context
+            try {
+                if (window.AudioContext || window.webkitAudioContext) {
+                    const TempCtxClass = window.AudioContext || window.webkitAudioContext;
+                    const tempCtx = new TempCtxClass();
+                    if (tempCtx.state === 'suspended') {
+                        tempCtx.resume();
+                    }
+                }
+            } catch (e) {}
+            
+            // Remove gesture listeners after first interaction
+            document.removeEventListener('click', unlockAudioAndSpeech);
+            document.removeEventListener('touchstart', unlockAudioAndSpeech);
+            document.removeEventListener('keydown', unlockAudioAndSpeech);
+        };
+        
+        document.addEventListener('click', unlockAudioAndSpeech);
+        document.addEventListener('touchstart', unlockAudioAndSpeech);
+        document.addEventListener('keydown', unlockAudioAndSpeech);
+    }
+
     // 1. Start Clock
     startClock();
 
@@ -292,20 +330,27 @@ function playNewOrderSound() {
         
         // 2. Play speech synthesis voice alert
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // Terminate previous alerts to prevent piling up
+            window.speechSynthesis.cancel(); // Clear any previous speaking alerts
             
             const utterance = new SpeechSynthesisUtterance("New order, please check");
             utterance.rate = 1.0;
             utterance.pitch = 1.0;
             
-            // Query for English voice locale if supported
-            const voices = window.speechSynthesis.getVoices();
-            const englishVoice = voices.find(v => v.lang.startsWith('en'));
+            // Try to find a local English voice (avoid online google voices if unstable)
+            const localEnglishVoice = speechVoices.find(v => v.lang.startsWith('en') && v.localService);
+            const englishVoice = localEnglishVoice || speechVoices.find(v => v.lang.startsWith('en')) || window.speechSynthesis.getVoices().find(v => v.lang.startsWith('en'));
             if (englishVoice) {
                 utterance.voice = englishVoice;
             }
             
-            window.speechSynthesis.speak(utterance);
+            utterance.onerror = (evt) => {
+                console.error("SpeechSynthesisUtterance error event:", evt.error);
+            };
+
+            // Wait 150ms for cancel operation to flush before starting speak in Chrome
+            setTimeout(() => {
+                window.speechSynthesis.speak(utterance);
+            }, 150);
         }
     } catch (e) {
         console.error("Notification sound playback error:", e);
