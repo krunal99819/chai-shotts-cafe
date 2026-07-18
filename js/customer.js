@@ -200,7 +200,7 @@ function setupEventListeners() {
         
         const phoneLabel = document.querySelector('label[for="custPhoneInput"]');
         if (phoneLabel) {
-            phoneLabel.innerHTML = zone === 'other' ? 'Mobile Number *' : 'Mobile Number (Optional)';
+            phoneLabel.innerHTML = (zone === 'other' || zone === 'hotel') ? 'Mobile Number *' : 'Mobile Number (Optional)';
         }
     });
 
@@ -321,8 +321,18 @@ async function handleCreateSession() {
             alert("Please enter your Room Number.");
             return;
         }
+        // Extract room number digits and validate between 201 and 216
+        const roomNum = parseInt(room.replace(/\D/g, ''));
+        if (isNaN(roomNum) || roomNum < 201 || roomNum > 216) {
+            alert("Only Room Numbers between 201 and 216 are allowed for Hotel Relax Inn.");
+            return;
+        }
+        if (!phone || phone.length < 10) {
+            alert("Please enter a valid 10-digit Mobile Number (compulsory for Hotel Relax Inn orders).");
+            return;
+        }
         localTableNum = 10; // Virtual table ID for Hotel Partner
-        locationLabel = `${room} (HOTEL RELAX INN)`;
+        locationLabel = `Room ${roomNum} (HOTEL RELAX INN)`;
     } else if (zone === 'other') {
         const place = elements.otherPlaceInput.value.trim();
         if (!place) {
