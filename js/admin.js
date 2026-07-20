@@ -17,6 +17,9 @@ let knownOrderIds = new Set(); // Keep track of seen order IDs to prevent duplic
 let uploadedImageBase64 = ""; // Track base64 data for uploaded product image
 let gstEnabled = false; // Synchronized global GST configuration flag
 let speechVoices = []; // Cache Speech Synthesis voices once loaded
+let storeStartTime = '12:00';
+let storeEndTime = '01:00';
+let storeOverrideTiming = false;
 
 // Chart instances (to destroy/recreate on data change)
 let trafficChartInstance = null;
@@ -185,19 +188,40 @@ function initAdminPanel() {
     db.requests.listen(handleRequestsUpdate);
     db.categories.listen(handleCategoriesUpdate);
     db.products.listen(handleProductsUpdate);
-    // Listen to global settings (GST config)
+    // Listen to global settings (GST, Timings, Overrides)
     db.settings.listen(settings => {
         gstEnabled = settings.gstEnabled || false;
-        elements.toggleGstConfig.checked = gstEnabled;
+        storeStartTime = settings.startTime || '12:00';
+        storeEndTime = settings.endTime || '01:00';
+        storeOverrideTiming = settings.overrideTiming || false;
+        
+        // Sync header checkbox
+        if (elements.toggleGstConfig) {
+            elements.toggleGstConfig.checked = gstEnabled;
+        }
+        
+        // Sync settings panel elements if present
+        const settingsGstToggle = document.getElementById('settingsGstToggle');
+        const settingsStartTime = document.getElementById('settingsStartTime');
+        const settingsEndTime = document.getElementById('settingsEndTime');
+        const settingsOverrideTiming = document.getElementById('settingsOverrideTiming');
+        
+        if (settingsGstToggle) settingsGstToggle.checked = gstEnabled;
+        if (settingsStartTime) settingsStartTime.value = storeStartTime;
+        if (settingsEndTime) settingsEndTime.value = storeEndTime;
+        if (settingsOverrideTiming) settingsOverrideTiming.checked = storeOverrideTiming;
+        
         if (selectedSession) {
             loadCheckoutDrawer(selectedSession);
         }
     });
 
-    elements.toggleGstConfig.addEventListener('change', async (e) => {
-        const checked = e.target.checked;
-        await db.settings.setGst(checked);
-    });
+    if (elements.toggleGstConfig) {
+        elements.toggleGstConfig.addEventListener('change', async (e) => {
+            const checked = e.target.checked;
+            await db.settings.setGst(checked);
+        });
+    }
 
     // 4. Bind Action Listeners
     setupCheckoutActions();
@@ -221,6 +245,35 @@ function initAdminPanel() {
     if (btnTestVoice) {
         btnTestVoice.addEventListener('click', () => {
             playNewOrderSound();
+        });
+    }
+
+    // 8. Bind Settings Panel Actions
+    const settingsGstToggle = document.getElementById('settingsGstToggle');
+    if (settingsGstToggle) {
+        settingsGstToggle.addEventListener('change', async (e) => {
+            await db.settings.setGst(e.target.checked);
+        });
+    }
+
+    const btnSaveSettings = document.getElementById('btnSaveSettings');
+    if (btnSaveSettings) {
+        btnSaveSettings.addEventListener('click', async () => {
+            const startTime = document.getElementById('settingsStartTime').value;
+            const endTime = document.getElementById('settingsEndTime').value;
+            const overrideTiming = document.getElementById('settingsOverrideTiming').checked;
+            
+            try {
+                await db.settings.update({
+                    startTime,
+                    endTime,
+                    overrideTiming
+                });
+                alert("Operational timing settings saved successfully!");
+            } catch (err) {
+                console.error(err);
+                alert("Failed to save operational settings.");
+            }
         });
     }
 }
@@ -1479,10 +1532,35 @@ function bindBillManagerEvents() {
 
     // 6. Analytics filter event listener
     if (analyticsFilter) {
-        analyticsFilter.addEventListener('change', () => {
+        analyticsFilter.addEventListener('change', (e) => {
+            const customDatesDiv = document.getElementById('analyticsCustomDates');
+            if (customDatesDiv) {
+                customDatesDiv.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+            }
             renderAnalyticsCharts();
         });
     }
+    const analyticsStartInput = document.getElementById('analyticsStartDate');
+    const analyticsEndInput = document.getElementById('analyticsEndDate');
+    if (analyticsStartInput) analyticsStartInput.addEventListener('change', renderAnalyticsCharts);
+    if (analyticsEndInput) analyticsEndInput.addEventListener('change', renderAnalyticsCharts);
+
+    // 7. Billing Date Filters binding
+    const billDateFilter = document.getElementById('billDateFilter');
+    const billCustomDates = document.getElementById('billCustomDates');
+    const billStartInput = document.getElementById('billStartDate');
+    const billEndInput = document.getElementById('billEndDate');
+
+    if (billDateFilter) {
+        billDateFilter.addEventListener('change', (e) => {
+            if (billCustomDates) {
+                billCustomDates.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+            }
+            renderBillHistory();
+        });
+    }
+    if (billStartInput) billStartInput.addEventListener('change', renderBillHistory);
+    if (billEndInput) billEndInput.addEventListener('change', renderBillHistory);
 }
 
 function renderBillHistory() {
@@ -1502,6 +1580,37 @@ function renderBillHistory() {
         filtered = filtered.filter(s => s.status === statusFilter);
     }
     
+    // Apply date range filters
+    const dateFilterEl = document.getElementById('billDateFilter');
+    if (dateFilterEl) {
+        const dateFilter = dateFilterEl.value;
+        const now = Date.now();
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const startOfToday = today.getTime();
+        
+        if (dateFilter === 'today') {
+            filtered = filtered.filter(s => s.createdAt >= startOfToday);
+        } else if (dateFilter === 'yesterday') {
+            const startOfYesterday = startOfToday - (24 * 60 * 60 * 1000);
+            filtered = filtered.filter(s => s.createdAt >= startOfYesterday && s.createdAt < startOfToday);
+        } else if (dateFilter === '7days') {
+            const threshold = now - (7 * 24 * 60 * 60 * 1000);
+            filtered = filtered.filter(s => s.createdAt >= threshold);
+        } else if (dateFilter === 'custom') {
+            const startInput = document.getElementById('billStartDate').value;
+            const endInput = document.getElementById('billEndDate').value;
+            if (startInput) {
+                const startTime = new Date(startInput).setHours(0,0,0,0);
+                filtered = filtered.filter(s => s.createdAt >= startTime);
+            }
+            if (endInput) {
+                const endTime = new Date(endInput).setHours(23,59,59,999);
+                filtered = filtered.filter(s => s.createdAt <= endTime);
+            }
+        }
+    }
+    
     if (query) {
         filtered = filtered.filter(s => {
             const name = (s.customerName || "").toLowerCase();
@@ -1510,6 +1619,31 @@ function renderBillHistory() {
             return name.includes(query) || phone.includes(query) || loc.includes(query);
         });
     }
+    
+    // Calculate running totals & paid totals
+    let runningTotal = 0;
+    let paidTotal = 0;
+    
+    filtered.forEach(session => {
+        const total = session.totalAmount || 0;
+        const tax = gstEnabled ? Math.round(total * 0.05) : 0;
+        const grandTotal = total + tax;
+        
+        if (session.status === 'open') {
+            runningTotal += grandTotal;
+        } else if (session.status === 'paid') {
+            paidTotal += grandTotal;
+        }
+    });
+    
+    // Update summary card values
+    const filteredBillCountEl = document.getElementById('filteredBillCount');
+    const filteredRunningTotalEl = document.getElementById('filteredRunningTotal');
+    const filteredPaidTotalEl = document.getElementById('filteredPaidTotal');
+    
+    if (filteredBillCountEl) filteredBillCountEl.innerText = filtered.length;
+    if (filteredRunningTotalEl) filteredRunningTotalEl.innerText = `₹${runningTotal}`;
+    if (filteredPaidTotalEl) filteredPaidTotalEl.innerText = `₹${paidTotal}`;
     
     // Sort by Date (newest first)
     filtered.sort((a, b) => b.createdAt - a.createdAt);
@@ -1735,25 +1869,61 @@ function renderAnalyticsCharts() {
     
     // Calculate timestamps
     const now = Date.now();
-    let threshold = 0;
+    let startTime = 0;
+    let endTime = Infinity;
     const today = new Date();
     today.setHours(0,0,0,0);
     const startOfToday = today.getTime();
     
     if (period === 'today') {
-        threshold = startOfToday;
+        startTime = startOfToday;
+    } else if (period === 'yesterday') {
+        startTime = startOfToday - (24 * 60 * 60 * 1000);
+        endTime = startOfToday;
     } else if (period === '7days') {
-        threshold = now - (7 * 24 * 60 * 60 * 1000);
+        startTime = now - (7 * 24 * 60 * 60 * 1000);
     } else if (period === '30days') {
-        threshold = now - (30 * 24 * 60 * 60 * 1000);
+        startTime = now - (30 * 24 * 60 * 60 * 1000);
     } else if (period === '90days') {
-        threshold = now - (90 * 24 * 60 * 60 * 1000);
+        startTime = now - (90 * 24 * 60 * 60 * 1000);
     } else if (period === '180days') {
-        threshold = now - (180 * 24 * 60 * 60 * 1000);
+        startTime = now - (180 * 24 * 60 * 60 * 1000);
+    } else if (period === 'custom') {
+        const startInput = document.getElementById('analyticsStartDate').value;
+        const endInput = document.getElementById('analyticsEndDate').value;
+        if (startInput) {
+            startTime = new Date(startInput).setHours(0,0,0,0);
+        } else {
+            startTime = 0;
+        }
+        if (endInput) {
+            endTime = new Date(endInput).setHours(23,59,59,999);
+        } else {
+            endTime = Infinity;
+        }
     }
     
-    const paidSessions = allSessions.filter(s => s.status === 'paid' && s.closedAt >= threshold);
-    const ordersFiltered = allOrders.filter(o => o.status === 'served' && o.createdAt >= threshold);
+    const paidSessions = allSessions.filter(s => s.status === 'paid' && s.closedAt >= startTime && s.closedAt <= endTime);
+    const ordersFiltered = allOrders.filter(o => o.status === 'served' && o.createdAt >= startTime && o.createdAt <= endTime);
+    
+    // Calculate stats totals for display
+    let totalSalesVal = 0;
+    paidSessions.forEach(s => {
+        const total = s.totalAmount || 0;
+        const tax = gstEnabled ? Math.round(total * 0.05) : 0;
+        totalSalesVal += (total + tax);
+    });
+    
+    const ordersCountVal = ordersFiltered.length;
+    const avgOrderVal = paidSessions.length > 0 ? Math.round(totalSalesVal / paidSessions.length) : 0;
+    
+    const totalSalesEl = document.getElementById('analyticsTotalSales');
+    const totalOrdersEl = document.getElementById('analyticsTotalOrders');
+    const avgOrderEl = document.getElementById('analyticsAvgOrderValue');
+    
+    if (totalSalesEl) totalSalesEl.innerText = `₹${totalSalesVal}`;
+    if (totalOrdersEl) totalOrdersEl.innerText = ordersCountVal;
+    if (avgOrderEl) avgOrderEl.innerText = `₹${avgOrderVal}`;
     
     // Destroy existing instances to clean up canvases
     if (trafficChartInstance) trafficChartInstance.destroy();
@@ -1834,7 +2004,7 @@ function renderAnalyticsCharts() {
     let revenueLabels = [];
     let revenueData = [];
     
-    if (period === 'today') {
+    if (period === 'today' || period === 'yesterday') {
         const hourlyRev = Array(24).fill(0);
         paidSessions.forEach(s => {
             const hr = new Date(s.closedAt).getHours();
@@ -1902,6 +2072,20 @@ function renderAnalyticsCharts() {
         });
         revenueLabels = Object.values(monthlyRev).map(item => item.label);
         revenueData = Object.values(monthlyRev).map(item => item.val);
+    } else if (period === 'custom') {
+        const dailyRev = {};
+        const totalDays = Math.round((endTime - startTime) / (24 * 60 * 60 * 1000));
+        for (let i = 0; i <= Math.min(totalDays, 60); i++) {
+            const d = new Date(startTime);
+            d.setDate(d.getDate() + i);
+            dailyRev[d.toDateString()] = { label: d.toLocaleDateString([], {day: 'numeric', month: 'short'}), val: 0 };
+        }
+        paidSessions.forEach(s => {
+            const dateStr = new Date(s.closedAt).toDateString();
+            if (dailyRev[dateStr]) dailyRev[dateStr].val += s.totalAmount;
+        });
+        revenueLabels = Object.values(dailyRev).map(item => item.label);
+        revenueData = Object.values(dailyRev).map(item => item.val);
     }
 
     const revenueCtx = document.getElementById('revenueChart').getContext('2d');

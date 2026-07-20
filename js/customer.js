@@ -13,6 +13,7 @@ let searchQuery = '';
 let cart = {}; // Format: { productId: { product, quantity, notes } }
 let activeOrderId = null; // Track most recent order ID placed
 let gstEnabled = false; // Synchronized global GST configuration flag
+let globalSettings = {}; // Cache global configuration settings
 
 // DOM Elements
 const elements = {
@@ -170,9 +171,10 @@ async function initApp() {
     db.categories.listen(loadCategories);
     db.products.listen(loadProducts);
     
-    // Load global settings (GST config)
+    // Load global settings (GST, Timings, Overrides)
     db.settings.listen(settings => {
-        gstEnabled = settings.gstEnabled || false;
+        globalSettings = settings || {};
+        gstEnabled = globalSettings.gstEnabled || false;
         // Dynamically update UI calculations
         updateCartUI();
         if (elements.cartDrawer.classList.contains('open')) {
@@ -295,6 +297,13 @@ async function checkActiveSession() {
 }
 
 async function handleCreateSession() {
+    if (!isStoreOpen(globalSettings)) {
+        const start = globalSettings.startTime || "12:00";
+        const end = globalSettings.endTime || "01:00";
+        alert(`Chai Shotts is currently closed.\nOnline Ordering hours: ${formatTime12h(start)} to ${formatTime12h(end)}.\nOrders can only be accepted during these hours unless manual overrides are enabled.`);
+        return;
+    }
+
     const name = elements.custNameInput.value.trim();
     const phone = elements.custPhoneInput.value.trim();
     const zone = elements.orderZoneSelect.value;
@@ -810,6 +819,13 @@ async function syncRunningBill() {
 // ==========================================================================
 
 async function handlePlaceOrder() {
+    if (!isStoreOpen(globalSettings)) {
+        const start = globalSettings.startTime || "12:00";
+        const end = globalSettings.endTime || "01:00";
+        alert(`Chai Shotts is currently closed.\nOnline Ordering hours: ${formatTime12h(start)} to ${formatTime12h(end)}.\nOrders can only be accepted during these hours unless manual overrides are enabled.`);
+        return;
+    }
+
     if (Object.keys(cart).length === 0) {
         alert("Your cart is empty!");
         return;
@@ -1185,4 +1201,40 @@ async function handleSubmitFeedback() {
         console.error(e);
         alert("Failed to save feedback.");
     }
+}
+
+function isStoreOpen(settings) {
+    if (!settings) return true; // Default open if settings list not resolved
+    if (settings.overrideTiming) return true;
+    
+    const startTimeStr = settings.startTime || "12:00";
+    const endTimeStr = settings.endTime || "01:00";
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMin = now.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMin;
+    
+    const [startH, startM] = startTimeStr.split(':').map(Number);
+    const startTimeMinutes = startH * 60 + startM;
+    
+    const [endH, endM] = endTimeStr.split(':').map(Number);
+    const endTimeMinutes = endH * 60 + endM;
+    
+    if (endTimeMinutes > startTimeMinutes) {
+        return (currentTimeMinutes >= startTimeMinutes && currentTimeMinutes <= endTimeMinutes);
+    } else {
+        return (currentTimeMinutes >= startTimeMinutes || currentTimeMinutes <= endTimeMinutes);
+    }
+}
+
+function formatTime12h(timeStr) {
+    if (!timeStr) return "";
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr);
+    const m = mStr || "00";
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    h = h ? h : 12;
+    return `${h}:${m} ${ampm}`;
 }

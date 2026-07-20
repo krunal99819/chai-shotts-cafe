@@ -692,13 +692,17 @@ export const db = {
             }
         },
         async setGst(enabled) {
+            await this.update({ gstEnabled: enabled });
+        },
+        async update(data) {
             if (firebaseInitialized) {
                 const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                await setDoc(doc(firestore, 'settings', 'global'), { gstEnabled: enabled }, { merge: true });
+                await setDoc(doc(firestore, 'settings', 'global'), data, { merge: true });
             } else {
-                const settings = { gstEnabled: enabled };
-                localStorage.setItem('cs_settings', JSON.stringify(settings));
-                mockDB.trigger('settings', settings);
+                const current = JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
+                const updated = { ...current, ...data };
+                localStorage.setItem('cs_settings', JSON.stringify(updated));
+                mockDB.trigger('settings', updated);
             }
         }
     }

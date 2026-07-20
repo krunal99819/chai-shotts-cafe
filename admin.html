@@ -81,6 +81,9 @@
                 <li class="menu-item" data-target="tabQrManager">
                     <button><i class="fa-solid fa-qrcode"></i> Table QR Codes</button>
                 </li>
+                <li class="menu-item" data-target="tabSettings">
+                    <button><i class="fa-solid fa-gear"></i> Settings & Timing</button>
+                </li>
             </ul>
 
             <div class="sidebar-footer">
@@ -369,10 +372,50 @@
                             <select id="analyticsFilter" style="padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.85rem; background-color:var(--color-bg-pure); font-weight:600;">
                                 <option value="7days">Last 7 Days</option>
                                 <option value="today">Today Only</option>
+                                <option value="yesterday">Yesterday</option>
                                 <option value="30days">Last 30 Days</option>
                                 <option value="90days">Last 3 Months (90 Days)</option>
                                 <option value="180days">Last 6 Months (180 Days)</option>
+                                <option value="custom">Custom Date Range...</option>
                             </select>
+                            <div id="analyticsCustomDates" style="display:none; gap:6px; align-items:center;">
+                                <input type="date" id="analyticsStartDate" style="padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.8rem;">
+                                <span style="font-size:0.8rem;">to</span>
+                                <input type="date" id="analyticsEndDate" style="padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.8rem;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sales Summary Stats Row -->
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px; margin-bottom:24px;">
+                        <div class="chart-container" style="padding:16px; display:flex; align-items:center; gap:16px; border-left:4px solid var(--color-primary-deep);">
+                            <div style="background:rgba(12,43,32,0.05); padding:10px; border-radius:50%; width:44px; height:44px; display:flex; align-items:center; justify-content:center; color:var(--color-primary-deep);">
+                                <i class="fa-solid fa-indian-rupee-sign" style="font-size:1.2rem;"></i>
+                            </div>
+                            <div>
+                                <div style="font-size:0.75rem; color:var(--color-text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Total Sales</div>
+                                <div id="analyticsTotalSales" style="font-size:1.3rem; font-weight:800; color:var(--color-primary-deep); margin-top:2px;">₹0</div>
+                            </div>
+                        </div>
+
+                        <div class="chart-container" style="padding:16px; display:flex; align-items:center; gap:16px; border-left:4px solid var(--color-accent-gold-dark);">
+                            <div style="background:rgba(223,168,86,0.1); padding:10px; border-radius:50%; width:44px; height:44px; display:flex; align-items:center; justify-content:center; color:var(--color-accent-gold-dark);">
+                                <i class="fa-solid fa-receipt" style="font-size:1.2rem;"></i>
+                            </div>
+                            <div>
+                                <div style="font-size:0.75rem; color:var(--color-text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Orders Count</div>
+                                <div id="analyticsTotalOrders" style="font-size:1.3rem; font-weight:800; color:var(--color-primary-deep); margin-top:2px;">0</div>
+                            </div>
+                        </div>
+
+                        <div class="chart-container" style="padding:16px; display:flex; align-items:center; gap:16px; border-left:4px solid #1f5e3b;">
+                            <div style="background:rgba(31,94,59,0.08); padding:10px; border-radius:50%; width:44px; height:44px; display:flex; align-items:center; justify-content:center; color:#1f5e3b;">
+                                <i class="fa-solid fa-calculator" style="font-size:1.2rem;"></i>
+                            </div>
+                            <div>
+                                <div style="font-size:0.75rem; color:var(--color-text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Avg Order Value</div>
+                                <div id="analyticsAvgOrderValue" style="font-size:1.3rem; font-weight:800; color:var(--color-primary-deep); margin-top:2px;">₹0</div>
+                            </div>
                         </div>
                     </div>
                     
@@ -417,14 +460,43 @@
                 <div id="tabBills" class="tab-content">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1.5px solid var(--color-border); padding-bottom:10px;">
                         <h2 style="font-size:1.2rem; margin-bottom:0;"><i class="fa-solid fa-file-invoice-dollar"></i> Bill Manager & History</h2>
-                        <div style="display:flex; gap:12px; align-items:center;">
-                            <input type="text" id="billSearchInput" placeholder="Search by name, table, room..." style="padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.85rem; width:220px;">
+                        <div style="display:flex; gap:12px; align-items:center; flex-wrap: wrap;">
+                            <input type="text" id="billSearchInput" placeholder="Search by name, table, room..." style="padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.85rem; width:180px;">
                             
                             <select id="billStatusFilter" style="padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.85rem; background-color:var(--color-bg-pure); font-weight:600;">
                                 <option value="all">All Sessions</option>
                                 <option value="open">Running Bills (Open)</option>
                                 <option value="paid">Paid Bills (Closed)</option>
                             </select>
+
+                            <select id="billDateFilter" style="padding:6px 12px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.85rem; background-color:var(--color-bg-pure); font-weight:600;">
+                                <option value="all">All Dates</option>
+                                <option value="today">Today</option>
+                                <option value="yesterday">Yesterday</option>
+                                <option value="7days">Last 7 Days</option>
+                                <option value="custom">Custom Date Range...</option>
+                            </select>
+
+                            <div id="billCustomDates" style="display:none; gap:6px; align-items:center;">
+                                <input type="date" id="billStartDate" style="padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.8rem;">
+                                <span style="font-size:0.8rem;">to</span>
+                                <input type="date" id="billEndDate" style="padding:4px 8px; border-radius:var(--radius-sm); border:1px solid var(--color-border); font-size:0.8rem;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Billing Summary Stats Card -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; background:var(--color-primary-deep); color:white; padding:12px 20px; border-radius:var(--radius-md); margin-bottom:16px; font-weight:600; font-size:0.9rem; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            Showing <span id="filteredBillCount" style="color:var(--color-accent-gold); font-weight:bold;">0</span> bills
+                        </div>
+                        <div style="display:flex; gap:24px; flex-wrap:wrap;">
+                            <div>
+                                Running Bills: <span id="filteredRunningTotal" style="color:var(--color-accent-gold); font-weight:bold;">₹0</span>
+                            </div>
+                            <div>
+                                Paid (Sales) Total: <span id="filteredPaidTotal" style="color:var(--color-accent-gold); font-weight:bold;">₹0</span>
+                            </div>
                         </div>
                     </div>
 
@@ -463,6 +535,70 @@
                     
                     <div id="qrPrintGrid" class="qr-print-grid">
                         <!-- Instantly loads 30 printable Table QR Cards -->
+                    </div>
+                </div>
+
+                <!-- 7. SETTINGS & OPERATIONAL TIMING PANEL -->
+                <div id="tabSettings" class="tab-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1.5px solid var(--color-border); padding-bottom:10px;">
+                        <h2 style="font-size:1.2rem; margin-bottom:0;"><i class="fa-solid fa-gear"></i> Settings & Operational Timing</h2>
+                    </div>
+
+                    <div style="max-width: 600px; display:flex; flex-direction:column; gap:20px;">
+                        <!-- GST Configuration Card -->
+                        <div class="chart-container" style="padding: 20px;">
+                            <h3 style="font-size: 1rem; color: var(--color-primary-deep); margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                                <i class="fa-solid fa-percent"></i> Tax Configuration
+                            </h3>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div style="font-weight:600;">Enable GST (5%)</div>
+                                    <div style="font-size:0.78rem; color:var(--color-text-muted);">Apply a 5% GST to checkout receipts in POS.</div>
+                                </div>
+                                <label class="switch-container" style="position:relative; display:inline-block; width:36px; height:20px; margin-bottom:0; cursor:pointer;">
+                                    <input type="checkbox" id="settingsGstToggle" style="opacity:0; width:0; height:0;">
+                                    <span class="switch-slider" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:#ccc; transition:.3s; border-radius:20px;"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Timing Configuration Card -->
+                        <div class="chart-container" style="padding: 20px;">
+                            <h3 style="font-size: 1rem; color: var(--color-primary-deep); margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                                <i class="fa-solid fa-clock"></i> Operational Hours Timing
+                            </h3>
+                            <div style="font-size:0.8rem; color:var(--color-text-muted); margin-bottom: 16px;">
+                                Standard online ordering hours are from 12:00 PM to 01:00 AM (next morning). Outside these hours, orders are automatically blocked for customers unless manual override is enabled.
+                            </div>
+
+                            <div style="display:flex; gap:16px; margin-bottom: 20px;">
+                                <div style="flex:1;">
+                                    <label style="font-weight:600; font-size:0.85rem; display:block; margin-bottom:6px;">Opening Time (Standard: 12:00 PM)</label>
+                                    <input type="time" id="settingsStartTime" value="12:00" style="width:100%; padding:8px; border:1px solid var(--color-border); border-radius:var(--radius-sm); font-size:0.88rem; font-family:inherit;">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-weight:600; font-size:0.85rem; display:block; margin-bottom:6px;">Closing Time (Standard: 01:00 AM)</label>
+                                    <input type="time" id="settingsEndTime" value="01:00" style="width:100%; padding:8px; border:1px solid var(--color-border); border-radius:var(--radius-sm); font-size:0.88rem; font-family:inherit;">
+                                </div>
+                            </div>
+
+                            <hr style="border:none; border-top:1px solid var(--color-border); margin:20px 0;">
+
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                                <div>
+                                    <div style="font-weight:600; color:var(--color-accent-gold-dark);">Manual Override (Allow Orders Anytime)</div>
+                                    <div style="font-size:0.78rem; color:var(--color-text-muted);">Manually force online ordering to be OPEN anytime, overriding regular opening/closing rules.</div>
+                                </div>
+                                <label class="switch-container" style="position:relative; display:inline-block; width:36px; height:20px; margin-bottom:0; cursor:pointer;">
+                                    <input type="checkbox" id="settingsOverrideTiming" style="opacity:0; width:0; height:0;">
+                                    <span class="switch-slider" style="position:absolute; top:0; left:0; right:0; bottom:0; background-color:#ccc; transition:.3s; border-radius:20px;"></span>
+                                </label>
+                            </div>
+
+                            <button type="button" id="btnSaveSettings" class="btn-primary" style="width:100%; padding:10px; font-size:0.9rem; font-weight:700;">
+                                <i class="fa-solid fa-floppy-disk"></i> Save Operational Settings
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -542,6 +678,6 @@
     <div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <!-- Application Script -->
-    <script type="module" src="js/admin.js?v=7"></script>
+    <script type="module" src="js/admin.js?v=8"></script>
 </body>
 </html>
