@@ -20,6 +20,7 @@ let speechVoices = []; // Cache Speech Synthesis voices once loaded
 let storeStartTime = '12:00';
 let storeEndTime = '01:00';
 let storeOverrideTiming = false;
+let currentFilteredBills = [];
 
 // Chart instances (to destroy/recreate on data change)
 let trafficChartInstance = null;
@@ -1507,6 +1508,14 @@ function bindBillManagerEvents() {
         });
     }
 
+    // 3.1 Export Bills to CSV
+    const btnExportCSV = document.getElementById('btnExportBillsCSV');
+    if (btnExportCSV) {
+        btnExportCSV.addEventListener('click', () => {
+            exportBillsToCSV();
+        });
+    }
+
     // 4. Add item to running bill
     if (btnConfirmAddItem) {
         btnConfirmAddItem.addEventListener('click', async () => {
@@ -1664,6 +1673,8 @@ function renderBillHistory() {
         });
     }
     
+    currentFilteredBills = filtered;
+    
     // Calculate running totals & paid totals
     let runningTotal = 0;
     let paidTotal = 0;
@@ -1754,6 +1765,77 @@ function renderBillHistory() {
             openBillModal(sId);
         });
     });
+}
+
+function exportBillsToCSV() {
+    if (!currentFilteredBills || currentFilteredBills.length === 0) {
+        alert("No bills available to export.");
+        return;
+    }
+    
+    // CSV Headers
+    const headers = [
+        "Date & Time",
+        "Location",
+        "Customer Name",
+        "Phone Number",
+        "Status",
+        "Subtotal (INR)",
+        "Discount (INR)",
+        "GST Tax (INR)",
+        "Grand Total (INR)",
+        "Payment Method",
+        "Closed Date"
+    ];
+    
+    const csvRows = [headers.join(",")];
+    
+    currentFilteredBills.forEach(session => {
+        const dateStr = new Date(session.createdAt).toLocaleString().replace(/,/g, '');
+        const locLabel = (session.locationLabel || `Table ${session.tableNumber}`).replace(/,/g, '');
+        const name = (session.customerName || "N/A").replace(/,/g, '');
+        const phone = session.customerPhone || "N/A";
+        const status = session.status === 'open' ? 'Open' : 'Paid';
+        
+        const subtotal = session.totalAmount || 0;
+        let discount = 0;
+        if (session.loyaltyDiscountPercent > 0) {
+            discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
+        }
+        const taxableTotal = Math.max(0, subtotal - discount);
+        const tax = gstEnabled ? Math.round(taxableTotal * 0.05) : 0;
+        const grandTotal = taxableTotal + tax;
+        
+        const paymentMethod = session.paymentMethod || "N/A";
+        const closedDate = session.closedAt ? new Date(session.closedAt).toLocaleString().replace(/,/g, '') : "N/A";
+        
+        const row = [
+            `"${dateStr}"`,
+            `"${locLabel}"`,
+            `"${name}"`,
+            `"${phone}"`,
+            `"${status}"`,
+            subtotal,
+            discount,
+            tax,
+            grandTotal,
+            `"${paymentMethod}"`,
+            `"${closedDate}"`
+        ];
+        
+        csvRows.push(row.join(","));
+    });
+    
+    const csvString = csvRows.join("\n");
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `chai_shotts_bills_export_${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 async function openBillModal(sessionId) {
