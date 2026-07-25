@@ -1045,7 +1045,7 @@ function renderFloatingCategoryMenu() {
     // Bind click handlers to floating menu items
     listEl.querySelectorAll('.floating-menu-item').forEach(item => {
         item.addEventListener('click', (e) => {
-            const catId = item.currentTarget.dataset.category;
+            const catId = item.dataset.category;
             currentCategory = catId;
             
             // Sync horizontal category pills
