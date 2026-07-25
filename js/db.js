@@ -378,6 +378,7 @@ export const db = {
                 const active = sessions.find(s => s.tableNumber === tableNumber && s.status === 'open');
                 return active || null;
             }
+        },
         async calculateLoyalty(customerPhone) {
             if (!customerPhone) {
                 return {
