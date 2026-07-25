@@ -1,4 +1,4 @@
-import db from './db.js?v=10';
+import db, { cleanPhoneNumber } from './db.js?v=12';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -330,13 +330,14 @@ async function handleCreateSession() {
     const name = elements.custNameInput.value.trim();
     const phone = elements.custPhoneInput.value.trim();
     const zone = elements.orderZoneSelect.value;
+    const cleanedPhone = cleanPhoneNumber(phone);
     
     if (!name) {
         alert("Please enter your name to start ordering.");
         return;
     }
 
-    if (!phone || phone.length < 10) {
+    if (!cleanedPhone || cleanedPhone.length !== 10) {
         alert("Please enter a valid 10-digit Mobile Number (compulsory to start ordering).");
         return;
     }
@@ -424,7 +425,7 @@ async function handleCreateSession() {
             }
         }
 
-        const session = await db.sessions.create(localTableNum, name, phone, locationLabel, zone);
+        const session = await db.sessions.create(localTableNum, name, cleanedPhone, locationLabel, zone);
         activeSession = session;
         localStorage.setItem('cs_active_session_id', session.id);
         elements.customerInfoModal.classList.remove('open');

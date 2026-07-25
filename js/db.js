@@ -5,6 +5,18 @@ import { defaultCategories, defaultProducts } from './menu-data.js';
 let app, auth, firestore;
 let firebaseInitialized = false;
 
+export function cleanPhoneNumber(phone) {
+    if (!phone) return "";
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 12 && cleaned.startsWith('91')) {
+        cleaned = cleaned.substring(2);
+    }
+    if (cleaned.length === 11 && cleaned.startsWith('0')) {
+        cleaned = cleaned.substring(1);
+    }
+    return cleaned;
+}
+
 // Check configuration and initialize Firebase if set
 const useFirebase = isFirebaseConfigured();
 
@@ -380,7 +392,8 @@ export const db = {
             }
         },
         async calculateLoyalty(customerPhone) {
-            if (!customerPhone) {
+            const clean = cleanPhoneNumber(customerPhone);
+            if (!clean) {
                 return {
                     loyaltyStep: 1,
                     loyaltyDiscountPercent: 0,
@@ -390,8 +403,9 @@ export const db = {
             let completedCount = 0;
             if (firebaseInitialized) {
                 const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const phoneVariants = [clean, '0' + clean, '91' + clean, '+91' + clean, '+91 ' + clean, '+91-' + clean];
                 const q = query(collection(firestore, 'sessions'), 
-                    where('customerPhone', '==', customerPhone),
+                    where('customerPhone', 'in', phoneVariants),
                     where('status', '==', 'paid')
                 );
                 const snapshot = await getDocs(q);
@@ -403,7 +417,7 @@ export const db = {
                 });
             } else {
                 const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
-                completedCount = sessions.filter(s => s.customerPhone === customerPhone && s.status === 'paid' && (s.totalAmount || 0) >= 299).length;
+                completedCount = sessions.filter(s => cleanPhoneNumber(s.customerPhone) === clean && s.status === 'paid' && (s.totalAmount || 0) >= 299).length;
             }
             const loyaltyStep = completedCount + 1;
             const cycleStep = completedCount % 10;

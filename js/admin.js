@@ -1,4 +1,4 @@
-import db from './db.js?v=10';
+import db, { cleanPhoneNumber } from './db.js?v=12';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -1483,16 +1483,17 @@ function bindBillManagerEvents() {
             
             const name = nameEl.value.trim();
             const phone = phoneEl.value.trim();
+            const cleanedPhone = cleanPhoneNumber(phone);
             if (!name) {
                 alert("Customer Name is required.");
                 return;
             }
-            if (!phone || phone.length < 10) {
+            if (!cleanedPhone || cleanedPhone.length !== 10) {
                 alert("A valid 10-digit Phone Number is compulsory.");
                 return;
             }
             try {
-                await db.sessions.updateDetails(activeBillingSessionId, name, phone);
+                await db.sessions.updateDetails(activeBillingSessionId, name, cleanedPhone);
                 alert("Customer details updated successfully!");
                 
                 // Reload running details
