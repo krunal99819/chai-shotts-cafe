@@ -202,7 +202,7 @@ function setupEventListeners() {
         
         const phoneLabel = document.querySelector('label[for="custPhoneInput"]');
         if (phoneLabel) {
-            phoneLabel.innerHTML = (zone === 'other' || zone === 'hotel') ? 'Mobile Number *' : 'Mobile Number (Optional)';
+            phoneLabel.innerHTML = 'Mobile Number *';
         }
     });
 
@@ -211,6 +211,30 @@ function setupEventListeners() {
         searchQuery = e.target.value.toLowerCase();
         renderMenu();
     });
+
+    // Zomato style category floating menu triggers
+    const floatBtn = document.getElementById('floatingCategoryBtn');
+    const floatMenu = document.getElementById('floatingCategoryMenu');
+    const closeFloatMenu = document.getElementById('closeFloatingMenu');
+
+    if (floatBtn && floatMenu) {
+        floatBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            floatMenu.classList.toggle('open');
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (!floatMenu.contains(e.target) && e.target !== floatBtn) {
+                floatMenu.classList.remove('open');
+            }
+        });
+    }
+    if (closeFloatMenu && floatMenu) {
+        closeFloatMenu.addEventListener('click', (e) => {
+            e.stopPropagation();
+            floatMenu.classList.remove('open');
+        });
+    }
 
     // Cart Drawer actions
     elements.btnViewCart.addEventListener('click', openCartDrawer);
@@ -233,12 +257,11 @@ function setupEventListeners() {
             alert("You don't have an active session yet. Please add items and order first!");
             return;
         }
-        elements.billOptionsModal.classList.add('open');
+        openBillSummaryModal();
     });
     elements.btnCloseBillOptions.addEventListener('click', () => {
         elements.billOptionsModal.classList.remove('open');
     });
-    elements.btnBillPrinted.addEventListener('click', handlePrintedBillRequest);
     elements.btnBillDigital.addEventListener('click', handleDigitalBillRequest);
 
     // Payment Modal Controls
@@ -313,6 +336,11 @@ async function handleCreateSession() {
         return;
     }
 
+    if (!phone || phone.length < 10) {
+        alert("Please enter a valid 10-digit Mobile Number (compulsory to start ordering).");
+        return;
+    }
+
     let localTableNum = 0;
     let locationLabel = "";
 
@@ -336,20 +364,12 @@ async function handleCreateSession() {
             alert("Only Room Numbers between 201 and 216 are allowed for Hotel Relax Inn.");
             return;
         }
-        if (!phone || phone.length < 10) {
-            alert("Please enter a valid 10-digit Mobile Number (compulsory for Hotel Relax Inn orders).");
-            return;
-        }
         localTableNum = 10; // Virtual table ID for Hotel Partner
         locationLabel = `Room ${roomNum} (HOTEL RELAX INN)`;
     } else if (zone === 'other') {
         const place = elements.otherPlaceInput.value.trim();
         if (!place) {
             alert("Please specify your place/address.");
-            return;
-        }
-        if (!phone || phone.length < 10) {
-            alert("Please enter a valid 10-digit Mobile Number (required for deliveries/takeaway).");
             return;
         }
         localTableNum = 11; // Virtual table ID for Outside Deliveries
@@ -446,6 +466,9 @@ function listenToSessionChanges(sessionId) {
 function handleSessionUpdate(session) {
     activeSession = session;
     
+    // Render loyalty card progress
+    renderLoyaltyCard(session);
+    
     // If table session is marked paid/closed, close it out locally
     if (session.status === 'paid') {
         localStorage.removeItem('cs_active_session_id');
@@ -463,6 +486,10 @@ function handleSessionUpdate(session) {
         cart = {};
         updateCartUI();
         elements.liveOrderTracker.style.display = 'none';
+        
+        // Hide loyalty card
+        renderLoyaltyCard(null);
+        
         if (activeOrdersListener) {
             activeOrdersListener();
             activeOrdersListener = null;
@@ -474,6 +501,64 @@ function handleSessionUpdate(session) {
         }
         updateCartUI();
     }
+}
+
+function renderLoyaltyCard(session) {
+    const container = document.getElementById('loyaltyCardContainer');
+    const statusText = document.getElementById('loyaltyStatusText');
+    const stampsGrid = document.getElementById('loyaltyStampsGrid');
+    
+    if (!container || !statusText || !stampsGrid) return;
+    
+    if (!session || !session.customerPhone) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    const step = session.loyaltyStep || 1;
+    const cycleStep = (step - 1) % 10; // 0-indexed step in the 10-stamp card
+    
+    let nextRewardMsg = "";
+    if (cycleStep < 2) nextRewardMsg = `(Next Reward: Free Cold Coffee at Step 3)`;
+    else if (cycleStep < 4) nextRewardMsg = `(Next Reward: 10% OFF Bill at Step 5)`;
+    else if (cycleStep < 6) nextRewardMsg = `(Next Reward: Free Margherita Pizza at Step 7)`;
+    else if (cycleStep < 9) nextRewardMsg = `(Next Reward: Free Private Movie Room at Step 10)`;
+    else nextRewardMsg = `(Completed! You are on Step 10. Private Movie Room Free!)`;
+
+    statusText.innerText = `Step ${cycleStep + 1} of 10 ${nextRewardMsg}`;
+    
+    let gridHtml = "";
+    for (let i = 0; i < 10; i++) {
+        let classes = "loyalty-stamp-slot";
+        let content = "";
+        
+        if (i < cycleStep) {
+            classes += " stamped";
+            content = `<span class="loyalty-stamp-number">${i + 1}</span>`;
+        } else if (i === cycleStep) {
+            classes += " active-step";
+            content = `<span class="loyalty-stamp-number">${i + 1}</span>`;
+        } else {
+            content = `<span class="loyalty-stamp-number">${i + 1}</span>`;
+        }
+        
+        // Add little label tag inside slots for rewards
+        let rewardTag = "";
+        if (i === 2) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-glass-water"></i> Coffee</span>`;
+        else if (i === 4) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-percent"></i> 10% Off</span>`;
+        else if (i === 6) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-pizza-slice"></i> Pizza</span>`;
+        else if (i === 9) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-film"></i> Movie</span>`;
+        
+        gridHtml += `
+            <div class="${classes}">
+                ${content}
+                ${rewardTag}
+            </div>
+        `;
+    }
+    stampsGrid.innerHTML = gridHtml;
 }
 
 // ==========================================================================
@@ -500,11 +585,13 @@ function loadCategories(categories) {
             renderMenu();
         });
     });
+    renderFloatingCategoryMenu();
 }
 
 function loadProducts(products) {
     menuProducts = products;
     renderMenu();
+    renderFloatingCategoryMenu();
 }
 
 function renderMenu() {
@@ -551,7 +638,7 @@ function renderMenu() {
         const items = productsByCategory[cat.id];
         if (items && items.length > 0) {
             html += `
-                <div class="menu-category-section animate-fade-in-up">
+                <div class="menu-category-section animate-fade-in-up" id="cat-header-${cat.id}">
                     <h2 class="section-title">
                         ${cat.name} <span>${items.length} Items</span>
                     </h2>
@@ -646,6 +733,40 @@ function bindMenuCartButtons() {
     });
 }
 
+function adjustLoyaltyFreeRewardInCart() {
+    if (!activeSession || !activeSession.loyaltyFreeItemReward) return;
+    
+    const rewardItemName = activeSession.loyaltyFreeItemReward;
+    const rewardProductId = `reward_${rewardItemName.replace(/\s+/g, '_').toLowerCase()}`;
+    
+    // Calculate subtotal of non-free items
+    let subtotal = 0;
+    Object.keys(cart).forEach(pId => {
+        if (pId !== rewardProductId) {
+            subtotal += cart[pId].product.price * cart[pId].quantity;
+        }
+    });
+    
+    if (subtotal >= 299) {
+        if (!cart[rewardProductId]) {
+            cart[rewardProductId] = {
+                product: {
+                    id: rewardProductId,
+                    name: `${rewardItemName} (Free Loyalty Reward)`,
+                    price: 0,
+                    isFree: true
+                },
+                quantity: 1,
+                notes: "Loyalty Program Reward"
+            };
+        }
+    } else {
+        if (cart[rewardProductId]) {
+            delete cart[rewardProductId];
+        }
+    }
+}
+
 function updateCartQty(productId, newQty) {
     if (newQty <= 0) {
         delete cart[productId];
@@ -661,6 +782,9 @@ function updateCartQty(productId, newQty) {
             cart[productId].quantity = newQty;
         }
     }
+    
+    // Adjust loyalty rewards automatically
+    adjustLoyaltyFreeRewardInCart();
     
     updateCartUI();
     renderMenu(); // Re-render menu to update card qty counts
@@ -715,20 +839,24 @@ function renderCartDrawerList() {
         const rowTotal = item.product.price * item.quantity;
         subtotal += rowTotal;
 
+        const priceText = item.product.price === 0 ? "Free" : `₹${item.product.price} each`;
+        const totalText = item.product.price === 0 ? "Free" : `₹${rowTotal}`;
+
         html += `
             <div class="cart-item-row">
                 <div class="cart-item-info">
                     <span class="cart-item-name">${item.product.name}</span>
-                    <div class="cart-item-price">₹${item.product.price} each</div>
+                    <div class="cart-item-price">${priceText}</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
+                    ${item.product.isFree ? `<span style="font-size:0.75rem; color:var(--color-accent-gold-dark); font-weight:700;">LOYALTY GIFT</span>` : `
                     <div class="qty-selector" style="background-color: var(--color-primary-mid);">
                         <button class="qty-btn" style="padding:4px 10px;" onclick="updateDrawerQty('${pId}', ${item.quantity - 1})">-</button>
                         <span class="qty-val" style="font-size:0.8rem;">${item.quantity}</span>
                         <button class="qty-btn" style="padding:4px 10px;" onclick="updateDrawerQty('${pId}', ${item.quantity + 1})">+</button>
-                    </div>
+                    </div>`}
                     <span style="font-family:var(--font-heading); font-weight:700; font-size:0.95rem; width:55px; text-align:right;">
-                        ₹${rowTotal}
+                        ${totalText}
                     </span>
                 </div>
             </div>
@@ -744,10 +872,35 @@ function renderCartDrawerList() {
     elements.cartItemsList.innerHTML = html;
     
     // Calculations
-    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0;
-    let grandTotal = subtotal + tax;
+    let discount = 0;
+    if (activeSession && activeSession.loyaltyDiscountPercent > 0) {
+        discount = Math.round(subtotal * (activeSession.loyaltyDiscountPercent / 100));
+    }
+    
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+    let grandTotal = taxableSubtotal + tax;
 
     elements.drawerSubtotal.innerText = `₹${subtotal}`;
+    
+    // Render/toggle discount line in UI
+    let discountRow = document.getElementById('drawerDiscountRow');
+    if (!discountRow) {
+        discountRow = document.createElement('div');
+        discountRow.id = 'drawerDiscountRow';
+        discountRow.className = 'bill-summary-row';
+        discountRow.style.color = '#1e7e34';
+        discountRow.style.fontWeight = '600';
+        elements.drawerSubtotal.parentElement.insertAdjacentElement('afterend', discountRow);
+    }
+    
+    if (discount > 0) {
+        discountRow.style.display = 'flex';
+        discountRow.innerHTML = `<span>Loyalty Discount (10% Off)</span><span>-₹${discount}</span>`;
+    } else {
+        discountRow.style.display = 'none';
+    }
+
     elements.drawerTax.innerText = `₹${tax}`;
     
     // Display running bill details if session exists
@@ -763,8 +916,12 @@ function renderCartDrawerList() {
 }
 
 async function syncRunningBill() {
+    const bottomContainer = document.getElementById('menuRunningBillContainer');
+    const bottomItems = document.getElementById('menuRunningBillItems');
+    
     if (!activeSession) {
         elements.runningBillSection.style.display = 'none';
+        if (bottomContainer) bottomContainer.style.display = 'none';
         return;
     }
     
@@ -777,6 +934,7 @@ async function syncRunningBill() {
 
     if (orders.length === 0) {
         elements.runningBillSection.style.display = 'none';
+        if (bottomContainer) bottomContainer.style.display = 'none';
         return;
     }
 
@@ -790,7 +948,10 @@ async function syncRunningBill() {
 
     // Render list of previously ordered items
     let html = "";
+    let bottomHtml = "";
     const mergedItems = {};
+    let subtotal = 0;
+
     orders.forEach(o => {
         o.items.forEach(item => {
             if (!mergedItems[item.productId]) {
@@ -802,16 +963,125 @@ async function syncRunningBill() {
 
     Object.keys(mergedItems).forEach(id => {
         const item = mergedItems[id];
+        const rowTotal = item.price * item.quantity;
+        subtotal += rowTotal;
+
+        const totalText = item.price === 0 ? "Free" : `₹${rowTotal}`;
+
         html += `
             <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.8rem;">
                 <span>${item.name} <strong style="color:var(--color-primary-deep)">x${item.quantity}</strong></span>
-                <span>₹${item.price * item.quantity}</span>
+                <span>${totalText}</span>
+            </div>
+        `;
+        
+        bottomHtml += `
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom:4px;">
+                <span>${item.name} <strong style="color:var(--color-accent-gold)">x${item.quantity}</strong></span>
+                <span style="font-weight:700;">${totalText}</span>
             </div>
         `;
     });
     
     elements.runningBillList.innerHTML = html;
     elements.runningBillSection.style.display = 'block';
+
+    // Update bottom of menu running bill box
+    if (bottomContainer && bottomItems) {
+        bottomItems.innerHTML = bottomHtml;
+        bottomContainer.style.display = 'block';
+        
+        let discount = 0;
+        if (activeSession.loyaltyDiscountPercent > 0) {
+            discount = Math.round(subtotal * (activeSession.loyaltyDiscountPercent / 100));
+        }
+        
+        const taxableSubtotal = Math.max(0, subtotal - discount);
+        const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+        const grandTotal = taxableSubtotal + tax;
+        
+        document.getElementById('menuRunningSubtotal').innerText = `₹${subtotal}`;
+        
+        const discountRow = document.getElementById('menuRunningDiscountRow');
+        const discountVal = document.getElementById('menuRunningDiscount');
+        if (discount > 0) {
+            if (discountRow) discountRow.style.display = 'flex';
+            if (discountVal) discountVal.innerText = `-₹${discount}`;
+        } else {
+            if (discountRow) discountRow.style.display = 'none';
+        }
+        
+        document.getElementById('menuRunningTax').innerText = `₹${tax}`;
+        document.getElementById('menuRunningGrandTotal').innerText = `₹${grandTotal}`;
+    }
+}
+
+function renderFloatingCategoryMenu() {
+    const listEl = document.getElementById('floatingCategoryList');
+    if (!listEl) return;
+    
+    let html = "";
+    const activeAll = currentCategory === 'all' ? 'active' : '';
+    html += `
+        <div class="floating-menu-item ${activeAll}" data-category="all">
+            <span>All Items</span>
+            <span class="floating-menu-count">${menuProducts.length}</span>
+        </div>
+    `;
+    
+    menuCategories.forEach(cat => {
+        const count = menuProducts.filter(p => p.categoryId === cat.id).length;
+        const active = currentCategory === cat.id ? 'active' : '';
+        html += `
+            <div class="floating-menu-item ${active}" data-category="${cat.id}">
+                <span>${cat.name}</span>
+                <span class="floating-menu-count">${count}</span>
+            </div>
+        `;
+    });
+    
+    listEl.innerHTML = html;
+    
+    // Bind click handlers to floating menu items
+    listEl.querySelectorAll('.floating-menu-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+            const catId = item.currentTarget.dataset.category;
+            currentCategory = catId;
+            
+            // Sync horizontal category pills
+            const pills = elements.categoriesList.querySelectorAll('.category-pill');
+            pills.forEach(p => {
+                if (p.dataset.category === catId) {
+                    p.classList.add('active');
+                    p.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                } else {
+                    p.classList.remove('active');
+                }
+            });
+            
+            // Re-render menu
+            renderMenu();
+            
+            // Close floating menu
+            const floatingMenu = document.getElementById('floatingCategoryMenu');
+            if (floatingMenu) floatingMenu.classList.remove('open');
+            
+            // Scroll to target header
+            if (catId === 'all') {
+                elements.menuContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                const targetHeader = document.getElementById(`cat-header-${catId}`);
+                if (targetHeader) {
+                    targetHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                    elements.menuContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+            
+            // Re-render floating list state
+            renderFloatingCategoryMenu();
+        });
+    });
 }
 
 // ==========================================================================
@@ -947,42 +1217,103 @@ async function handleWaiterCall() {
     }
 }
 
-async function handlePrintedBillRequest() {
+async function openBillSummaryModal() {
     try {
-        const loc = activeSession?.locationLabel || ("Table " + tableNumber);
-        await db.requests.add(tableNumber, 'bill_printed', loc);
-        elements.billOptionsModal.classList.remove('open');
-        alert("Printed bill requested. Staff is bringing the invoice to " + loc);
+        const itemsBody = document.getElementById('billPopupItemsBody');
+        const locSpan = document.getElementById('billPopupLocation');
+        const dateSpan = document.getElementById('billPopupDate');
+        
+        const subtotalSpan = document.getElementById('billPopupSubtotal');
+        const discountRow = document.getElementById('billPopupDiscountRow');
+        const discountSpan = document.getElementById('billPopupDiscount');
+        const taxSpan = document.getElementById('billPopupTax');
+        const grandTotalSpan = document.getElementById('billPopupGrandTotal');
+        
+        if (!itemsBody || !locSpan || !dateSpan || !subtotalSpan || !taxSpan || !grandTotalSpan) return;
+
+        locSpan.innerText = activeSession?.locationLabel || `Table ${tableNumber}`;
+        dateSpan.innerText = new Date(activeSession?.createdAt || Date.now()).toLocaleDateString();
+
+        // Fetch all orders placed in this session
+        const orders = await new Promise((resolve) => {
+            db.orders.listen(allOrders => {
+                const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
+                resolve(sessionOrders);
+            });
+        });
+
+        if (orders.length === 0) {
+            alert("No orders placed yet!");
+            return;
+        }
+
+        // Consolidate items
+        const merged = {};
+        let subtotal = 0;
+        orders.forEach(o => {
+            o.items.forEach(item => {
+                if (!merged[item.productId]) {
+                    merged[item.productId] = { name: item.name, qty: 0, price: item.price };
+                }
+                merged[item.productId].qty += item.quantity;
+            });
+        });
+
+        let itemsHtml = "";
+        Object.keys(merged).forEach(id => {
+            const item = merged[id];
+            const rowTotal = item.qty * item.price;
+            subtotal += rowTotal;
+            
+            const priceText = item.price === 0 ? "Free" : `₹${rowTotal}`;
+            itemsHtml += `
+                <tr style="border-bottom: 1px solid rgba(0,0,0,0.05);">
+                    <td style="padding: 6px 0;">${item.name}</td>
+                    <td style="padding: 6px 0; text-align: center;">${item.qty}</td>
+                    <td style="padding: 6px 0; text-align: right; font-weight: 700;">${priceText}</td>
+                </tr>
+            `;
+        });
+        
+        itemsBody.innerHTML = itemsHtml;
+        
+        // Discount
+        let discount = 0;
+        if (activeSession && activeSession.loyaltyDiscountPercent > 0) {
+            discount = Math.round(subtotal * (activeSession.loyaltyDiscountPercent / 100));
+        }
+
+        const taxableSubtotal = Math.max(0, subtotal - discount);
+        const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+        const grandTotal = taxableSubtotal + tax;
+
+        subtotalSpan.innerText = `₹${subtotal}`;
+        if (discount > 0) {
+            if (discountRow) discountRow.style.display = 'flex';
+            if (discountSpan) discountSpan.innerText = `-₹${discount}`;
+        } else {
+            if (discountRow) discountRow.style.display = 'none';
+        }
+        taxSpan.innerText = `₹${tax}`;
+        grandTotalSpan.innerText = `₹${grandTotal}`;
+
+        elements.billOptionsModal.classList.add('open');
     } catch (e) {
         console.error(e);
-        alert("Failed to send request.");
+        alert("Failed to build bill summary.");
     }
 }
-
-// ==========================================================================
-// 7. INVOICE GENERATION & UPI PAYMENT
-// ==========================================================================
 
 async function handleDigitalBillRequest() {
     try {
         const loc = activeSession?.locationLabel || ("Table " + tableNumber);
         await db.requests.add(tableNumber, 'bill_digital', loc);
-        elements.billOptionsModal.classList.remove('open');
         
         // Fetch all orders placed in this session
         db.orders.listen(async (allOrders) => {
             const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
-            
-            if (sessionOrders.length === 0) {
-                alert("No orders placed yet!");
-                return;
-            }
-            
-            // 1. Generate & Download PDF Invoice
+            if (sessionOrders.length === 0) return;
             generateInvoicePDF(activeSession, sessionOrders);
-            
-            // 2. Open UPI QR Code Modal
-            openUPIPaymentModal(activeSession.totalAmount);
         });
     } catch (e) {
         console.error(e);
@@ -1072,29 +1403,42 @@ function generateInvoicePDF(session, orders) {
         subtotal += rowAmount;
         y += 5;
         
-        // Print truncated item name if too long
         let itemName = item.name;
         if (itemName.length > 20) itemName = itemName.slice(0, 18) + "..";
         
+        const priceText = item.price === 0 ? "Free" : `₹${rowAmount}`;
+        
         doc.text(itemName, margin, y);
         doc.text(`${item.qty}`, 52, y, { align: "right" });
-        doc.text(`₹${rowAmount}`, 80 - margin, y, { align: "right" });
+        doc.text(priceText, 80 - margin, y, { align: "right" });
     });
 
     y += 4;
     doc.line(margin, y, 80 - margin, y);
 
-    // Calculation Lines
-    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0; // 5% total GST if enabled
-    const cgst = (tax / 2).toFixed(2);
-    const sgst = (tax / 2).toFixed(2);
-    const grandTotal = subtotal + tax;
+    // Calculations
+    let discount = 0;
+    if (session.loyaltyDiscountPercent > 0) {
+        discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
+    }
+    
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+    const grandTotal = taxableSubtotal + tax;
 
     y += 5;
     doc.text("Subtotal:", 48, y, { align: "right" });
     doc.text(`₹${subtotal}`, 80 - margin, y, { align: "right" });
 
+    if (discount > 0) {
+        y += 4;
+        doc.text("Loyalty Discount (10%):", 48, y, { align: "right" });
+        doc.text(`-₹${discount}`, 80 - margin, y, { align: "right" });
+    }
+
     if (gstEnabled) {
+        const cgst = (tax / 2).toFixed(2);
+        const sgst = (tax / 2).toFixed(2);
         y += 4;
         doc.text("CGST (2.5%):", 48, y, { align: "right" });
         doc.text(`₹${cgst}`, 80 - margin, y, { align: "right" });

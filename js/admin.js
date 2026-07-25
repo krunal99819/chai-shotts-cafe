@@ -720,10 +720,27 @@ function loadCheckoutDrawer(session) {
 
     // Billing Totals (GST conditionally configured)
     const subtotal = session.totalAmount;
-    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0;
-    const grandTotal = subtotal + tax;
+    let discount = 0;
+    if (session.loyaltyDiscountPercent > 0) {
+        discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
+    }
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+    const grandTotal = taxableSubtotal + tax;
 
     elements.checkoutSubtotal.innerText = `₹${subtotal}`;
+    
+    const discountRow = document.getElementById('checkoutDiscountRow');
+    const discountSpan = document.getElementById('checkoutDiscount');
+    if (discountRow && discountSpan) {
+        if (discount > 0) {
+            discountRow.style.display = 'flex';
+            discountSpan.innerText = `-₹${discount}`;
+        } else {
+            discountRow.style.display = 'none';
+        }
+    }
+    
     elements.checkoutTax.innerText = `₹${tax}`;
     elements.checkoutGrandTotal.innerText = `₹${grandTotal}`;
 }
@@ -742,7 +759,16 @@ function setupCheckoutActions() {
             if (!selectedSession) return;
             const method = e.currentTarget.dataset.method;
             
-            if (confirm(`Confirm checkout of ₹${selectedSession.totalAmount} for Table ${selectedSession.tableNumber} using [${method}]?`)) {
+            const subtotal = selectedSession.totalAmount;
+            let discount = 0;
+            if (selectedSession.loyaltyDiscountPercent > 0) {
+                discount = Math.round(subtotal * (selectedSession.loyaltyDiscountPercent / 100));
+            }
+            const taxableSubtotal = Math.max(0, subtotal - discount);
+            const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+            const checkoutGrandTotal = taxableSubtotal + tax;
+
+            if (confirm(`Confirm checkout of ₹${checkoutGrandTotal} (Subtotal: ₹${subtotal}, Discount: -₹${discount}, GST: ₹${tax}) for Table ${selectedSession.tableNumber} using [${method}]?`)) {
                 // 1. Close table session
                 await db.sessions.close(selectedSession.id, method);
                 
@@ -846,12 +872,25 @@ function reprintPOSInvoice(session, orders) {
     y += 4;
     doc.line(margin, y, 80 - margin, y);
 
-    const tax = gstEnabled ? Math.round(subtotal * 0.05) : 0;
-    const grandTotal = subtotal + tax;
+    // Calculations
+    let discount = 0;
+    if (session.loyaltyDiscountPercent > 0) {
+        discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
+    }
+
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+    const grandTotal = taxableSubtotal + tax;
 
     y += 5;
     doc.text("Subtotal:", 48, y, { align: "right" });
     doc.text(`₹${subtotal}`, 80 - margin, y, { align: "right" });
+
+    if (discount > 0) {
+        y += 4;
+        doc.text("Loyalty Discount (10%):", 48, y, { align: "right" });
+        doc.text(`-₹${discount}`, 80 - margin, y, { align: "right" });
+    }
 
     if (gstEnabled) {
         y += 4;
@@ -1448,6 +1487,10 @@ function bindBillManagerEvents() {
                 alert("Customer Name is required.");
                 return;
             }
+            if (!phone || phone.length < 10) {
+                alert("A valid 10-digit Phone Number is compulsory.");
+                return;
+            }
             try {
                 await db.sessions.updateDetails(activeBillingSessionId, name, phone);
                 alert("Customer details updated successfully!");
@@ -1626,8 +1669,13 @@ function renderBillHistory() {
     
     filtered.forEach(session => {
         const total = session.totalAmount || 0;
-        const tax = gstEnabled ? Math.round(total * 0.05) : 0;
-        const grandTotal = total + tax;
+        let discount = 0;
+        if (session.loyaltyDiscountPercent > 0) {
+            discount = Math.round(total * (session.loyaltyDiscountPercent / 100));
+        }
+        const taxableTotal = Math.max(0, total - discount);
+        const tax = gstEnabled ? Math.round(taxableTotal * 0.05) : 0;
+        const grandTotal = taxableTotal + tax;
         
         if (session.status === 'open') {
             runningTotal += grandTotal;
@@ -1664,8 +1712,13 @@ function renderBillHistory() {
         const dateStr = new Date(session.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
         const locLabel = session.locationLabel || `Table ${session.tableNumber}`;
         const total = session.totalAmount;
-        const tax = gstEnabled ? Math.round(total * 0.05) : 0;
-        const grandTotal = total + tax;
+        let discount = 0;
+        if (session.loyaltyDiscountPercent > 0) {
+            discount = Math.round(total * (session.loyaltyDiscountPercent / 100));
+        }
+        const taxableTotal = Math.max(0, total - discount);
+        const tax = gstEnabled ? Math.round(taxableTotal * 0.05) : 0;
+        const grandTotal = taxableTotal + tax;
         
         let statusBadge = "";
         let actionBtn = "";
@@ -1840,11 +1893,61 @@ async function openBillModal(sessionId) {
         if (customerEditSection) customerEditSection.style.display = "none";
         if (addItemSection) addItemSection.style.display = "none";
     }
+
+    // Display loyalty program status label
+    const loyaltyStatusDiv = document.getElementById('billModalLoyaltyStatus');
+    if (loyaltyStatusDiv) {
+        if (session.customerPhone) {
+            loyaltyStatusDiv.style.display = 'block';
+            const step = session.loyaltyStep || 1;
+            const cycleStep = (step - 1) % 10;
+            let rewardMsg = "";
+            if (session.loyaltyFreeItemReward) {
+                rewardMsg = ` (Reward Active: Free ${session.loyaltyFreeItemReward})`;
+            } else if (session.loyaltyDiscountPercent > 0) {
+                rewardMsg = ` (Reward Active: 10% Off Bill)`;
+            } else {
+                const nextRewardStep = cycleStep < 2 ? 3 : (cycleStep < 4 ? 5 : (cycleStep < 6 ? 7 : 10));
+                rewardMsg = ` (Next Reward at Step ${nextRewardStep})`;
+            }
+            loyaltyStatusDiv.innerHTML = `<i class="fa-solid fa-mug-hot"></i> Loyalty Status: Visit ${cycleStep + 1} of 10.${rewardMsg}`;
+        } else {
+            loyaltyStatusDiv.style.display = 'none';
+        }
+    }
     
     // Calculate total & taxes
-    const total = session.totalAmount;
-    const tax = gstEnabled ? Math.round(total * 0.05) : 0;
-    const grandTotal = total + tax;
+    let subtotal = 0;
+    keys.forEach(pId => {
+        const item = consolidatedItems[pId];
+        subtotal += item.qty * item.price;
+    });
+
+    let discount = 0;
+    if (session.loyaltyDiscountPercent > 0) {
+        discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
+    }
+
+    const taxableSubtotal = Math.max(0, subtotal - discount);
+    const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
+    const grandTotal = taxableSubtotal + tax;
+
+    // Update calculation UI
+    const subtotalEl = document.getElementById('billModalSubtotal');
+    const discountRow = document.getElementById('billModalDiscountRow');
+    const discountEl = document.getElementById('billModalDiscount');
+    const taxEl = document.getElementById('billModalTax');
+
+    if (subtotalEl) subtotalEl.innerText = `₹${subtotal}`;
+    if (discountRow && discountEl) {
+        if (discount > 0) {
+            discountRow.style.display = 'flex';
+            discountEl.innerText = `-₹${discount}`;
+        } else {
+            discountRow.style.display = 'none';
+        }
+    }
+    if (taxEl) taxEl.innerText = `₹${tax}`;
     modalGrandTotal.innerText = `₹${grandTotal}`;
     
     // Show Modal

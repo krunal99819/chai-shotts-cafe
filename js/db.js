@@ -279,14 +279,50 @@ export const db = {
         },
         async updateStatus(id, status) {
             if (firebaseInitialized) {
-                const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const { doc, updateDoc, getDoc, collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await updateDoc(doc(firestore, 'orders', id), { status });
+                
+                const orderDoc = await getDoc(doc(firestore, 'orders', id));
+                if (orderDoc.exists()) {
+                    const orderData = orderDoc.data();
+                    if (orderData.sessionId) {
+                        const q = query(collection(firestore, 'orders'), where('sessionId', '==', orderData.sessionId));
+                        const snapshot = await getDocs(q);
+                        let newTotal = 0;
+                        snapshot.forEach(d => {
+                            const o = d.data();
+                            const oStatus = d.id === id ? status : o.status;
+                            if (oStatus !== 'cancelled') {
+                                newTotal += o.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                            }
+                        });
+                        await updateDoc(doc(firestore, 'sessions', orderData.sessionId), { totalAmount: newTotal });
+                    }
+                }
             } else {
                 const orders = JSON.parse(localStorage.getItem('cs_orders') || '[]');
                 const idx = orders.findIndex(o => o.id === id);
                 if (idx !== -1) {
                     orders[idx].status = status;
                     localStorage.setItem('cs_orders', JSON.stringify(orders));
+                    
+                    const orderData = orders[idx];
+                    if (orderData.sessionId) {
+                        const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                        const sIdx = sessions.findIndex(s => s.id === orderData.sessionId);
+                        if (sIdx !== -1) {
+                            let newTotal = 0;
+                            orders.forEach(o => {
+                                if (o.sessionId === orderData.sessionId && o.status !== 'cancelled') {
+                                    newTotal += o.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                                }
+                            });
+                            sessions[sIdx].totalAmount = newTotal;
+                            localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                            mockDB.trigger('sessions', sessions);
+                        }
+                    }
+                    
                     mockDB.trigger('orders', orders);
                 }
             }
@@ -342,9 +378,49 @@ export const db = {
                 const active = sessions.find(s => s.tableNumber === tableNumber && s.status === 'open');
                 return active || null;
             }
+        async calculateLoyalty(customerPhone) {
+            if (!customerPhone) {
+                return {
+                    loyaltyStep: 1,
+                    loyaltyDiscountPercent: 0,
+                    loyaltyFreeItemReward: null
+                };
+            }
+            let completedCount = 0;
+            if (firebaseInitialized) {
+                const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const q = query(collection(firestore, 'sessions'), 
+                    where('customerPhone', '==', customerPhone),
+                    where('status', '==', 'paid')
+                );
+                const snapshot = await getDocs(q);
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if ((data.totalAmount || 0) >= 299) {
+                        completedCount++;
+                    }
+                });
+            } else {
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                completedCount = sessions.filter(s => s.customerPhone === customerPhone && s.status === 'paid' && (s.totalAmount || 0) >= 299).length;
+            }
+            const loyaltyStep = completedCount + 1;
+            const cycleStep = completedCount % 10;
+            let loyaltyDiscountPercent = (cycleStep === 4) ? 10 : 0;
+            let loyaltyFreeItemReward = null;
+            if (cycleStep === 2) loyaltyFreeItemReward = "Cold Coffee";
+            else if (cycleStep === 6) loyaltyFreeItemReward = "Margherita Pizza 7\"";
+            else if (cycleStep === 9) loyaltyFreeItemReward = "Private Movie Room for 2 Persons";
+            
+            return {
+                loyaltyStep,
+                loyaltyDiscountPercent,
+                loyaltyFreeItemReward
+            };
         },
         async create(tableNumber, customerName, customerPhone = "", locationLabel = "", orderZone = "table") {
             tableNumber = parseInt(tableNumber);
+            const loyaltyInfo = await this.calculateLoyalty(customerPhone);
             const newSession = {
                 tableNumber,
                 customerName,
@@ -356,7 +432,8 @@ export const db = {
                 closedAt: null,
                 orderIds: [],
                 totalAmount: 0,
-                paymentMethod: null
+                paymentMethod: null,
+                ...loyaltyInfo
             };
 
             if (firebaseInitialized) {
@@ -504,11 +581,13 @@ export const db = {
             }
         },
         async updateDetails(sessionId, customerName, customerPhone) {
+            const loyaltyInfo = await this.calculateLoyalty(customerPhone);
             if (firebaseInitialized) {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await updateDoc(doc(firestore, 'sessions', sessionId), {
                     customerName,
-                    customerPhone
+                    customerPhone,
+                    ...loyaltyInfo
                 });
             } else {
                 const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
@@ -516,6 +595,7 @@ export const db = {
                 if (idx !== -1) {
                     sessions[idx].customerName = customerName;
                     sessions[idx].customerPhone = customerPhone;
+                    Object.assign(sessions[idx], loyaltyInfo);
                     localStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }

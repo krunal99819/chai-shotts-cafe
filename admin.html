@@ -208,6 +208,10 @@
                                         <span>Subtotal</span>
                                         <span id="checkoutSubtotal">₹0</span>
                                     </div>
+                                    <div id="checkoutDiscountRow" style="display:none; justify-content:space-between; color:#1e7e34; font-weight:600;">
+                                        <span>Loyalty Discount (10% Off)</span>
+                                        <span id="checkoutDiscount">-₹0</span>
+                                    </div>
                                     <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
                                         <span>GST (5%)</span>
                                         <span id="checkoutTax">₹0</span>
@@ -630,21 +634,26 @@
                 <button type="button" id="btnSaveBillCustomerDetails" class="btn-primary" style="padding:6px 16px; font-size:0.8rem; width:fit-content;">
                     <i class="fa-solid fa-check"></i> Update Info
                 </button>
+                <div id="billModalLoyaltyStatus" style="margin-top:10px; font-size:0.8rem; font-weight:600; color:var(--color-primary-deep); display:none; background: rgba(12,43,32,0.05); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--color-accent-gold);">
+                    <i class="fa-solid fa-mug-hot"></i> Loyalty Status: Visit -- of 10.
+                </div>
             </div>
 
             <!-- Items List -->
-            <h4 style="font-size:0.85rem; text-transform:uppercase; color:var(--color-accent-gold-dark); margin:18px 0 10px 0; letter-spacing:0.5px;">Ordered Items</h4>
-            <div id="billModalItemsContainer" style="max-height: 220px; overflow-y: auto; border:1px solid var(--color-border); border-radius:var(--radius-md); padding:10px; background:var(--color-bg-pure); margin-bottom:16px;">
-                <!-- Items list goes here -->
+            <div style="margin-bottom: 20px;">
+                <h4 style="font-size:0.85rem; text-transform:uppercase; color:var(--color-accent-gold-dark); margin:0 0 10px 0; letter-spacing:0.5px;">Ordered Items</h4>
+                <div id="billModalItemsContainer" style="max-height: 200px; overflow-y: auto; border:1px solid var(--color-border); padding:10px; border-radius:var(--radius-sm); background:var(--color-bg-pure);">
+                    <!-- Loaded dynamically -->
+                </div>
             </div>
 
             <!-- Add Item section (running bills only) -->
-            <div id="billAddItemSection" style="border:1px dashed var(--color-border); border-radius:var(--radius-md); padding:12px; background:rgba(12,43,32,0.02); margin-bottom:16px;">
-                <h4 style="font-size:0.8rem; color:var(--color-primary-deep); margin:0 0 8px 0;"><i class="fa-solid fa-plus-circle"></i> Add Item to Running Bill</h4>
-                <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; align-items:end;">
+            <div id="billAddItemSection" style="margin-bottom: 20px; border:1px solid var(--color-border); padding:12px; border-radius:var(--radius-md); background:var(--color-bg-pure);">
+                <h4 style="font-size:0.85rem; text-transform:uppercase; color:var(--color-accent-gold-dark); margin:0 0 10px 0; letter-spacing:0.5px;">Add Item to Bill</h4>
+                <div style="display:grid; grid-template-columns: 2fr 1fr auto; gap:12px; align-items:flex-end;">
                     <div class="form-group" style="margin-bottom:0;">
-                        <label for="billAddProductSelect" style="font-size:0.75rem; font-weight:bold; color:var(--color-text-muted);">Select Menu Item</label>
-                        <select id="billAddProductSelect" style="padding:6px; font-size:0.85rem; width:100%; border-radius:var(--radius-sm); border:1px solid var(--color-border); background-color:white;"></select>
+                        <label for="billAddProductSelect" style="font-size:0.75rem; font-weight:bold; color:var(--color-text-muted);">Product</label>
+                        <select id="billAddProductSelect" style="padding:6px; font-size:0.85rem; width:100%; border:1px solid var(--color-border); border-radius:var(--radius-sm); background:var(--color-bg-pure);"></select>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
                         <label for="billAddProductQty" style="font-size:0.75rem; font-weight:bold; color:var(--color-text-muted);">Qty</label>
@@ -657,18 +666,32 @@
             </div>
 
             <!-- Totals & Actions -->
-            <div style="border-top:1.5px solid var(--color-border); padding-top:12px; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:0.8rem; color:var(--color-text-muted);">Session Grand Total (incl. tax if active):</div>
-                    <div id="billModalGrandTotal" style="font-family:var(--font-heading); font-weight:800; font-size:1.35rem; color:var(--color-primary-deep);">₹0</div>
+            <div style="border-top:1.5px solid var(--color-border); padding-top:12px; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:var(--color-text-muted);">
+                    <span>Subtotal:</span>
+                    <span id="billModalSubtotal" style="font-weight:600;">₹0</span>
                 </div>
-                <div style="display:flex; gap:10px;">
-                    <button type="button" id="btnPrintReceiptFromModal" class="btn-primary" style="padding:8px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px; background-color:var(--color-accent-gold); border-color:var(--color-accent-gold); color:var(--color-primary-deep);">
-                        <i class="fa-solid fa-print"></i> Print Receipt
-                    </button>
-                    <button type="button" id="btnCloseBillModal" class="btn-secondary" style="padding:8px 16px; font-size:0.85rem; background:#6c757d; border-color:#6c757d; color:white;">
-                        Close
-                    </button>
+                <div id="billModalDiscountRow" style="display:none; justify-content:space-between; font-size:0.85rem; color:#1e7e34;">
+                    <span>Loyalty Discount (10% Off):</span>
+                    <span id="billModalDiscount" style="font-weight:600;">-₹0</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:var(--color-text-muted);">
+                    <span>GST (5% if active):</span>
+                    <span id="billModalTax" style="font-weight:600;">₹0</span>
+                </div>
+                <div style="border-top:1px dashed var(--color-border); padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-size:0.8rem; color:var(--color-text-muted);">Session Grand Total:</div>
+                        <div id="billModalGrandTotal" style="font-family:var(--font-heading); font-weight:800; font-size:1.35rem; color:var(--color-primary-deep);">₹0</div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" id="btnPrintReceiptFromModal" class="btn-primary" style="padding:8px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px; background-color:var(--color-accent-gold); border-color:var(--color-accent-gold); color:var(--color-primary-deep);">
+                            <i class="fa-solid fa-print"></i> Print Receipt
+                        </button>
+                        <button type="button" id="btnCloseBillModal" class="btn-secondary" style="padding:8px 16px; font-size:0.85rem; background:#6c757d; border-color:#6c757d; color:white;">
+                            Close
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
