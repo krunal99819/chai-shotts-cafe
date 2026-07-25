@@ -1,4 +1,4 @@
-import db from './db.js?v=9';
+import db from './db.js?v=10';
 import soundEffects from './audio.js';
 
 // State Variables

@@ -1,4 +1,4 @@
-import db from './db.js?v=9';
+import db from './db.js?v=10';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -581,8 +581,16 @@ function loadCategories(categories) {
         pill.addEventListener('click', (e) => {
             pills.forEach(p => p.classList.remove('active'));
             pill.classList.add('active');
-            currentCategory = pill.dataset.category;
-            renderMenu();
+            const catId = pill.dataset.category;
+            
+            if (catId === 'all') {
+                elements.menuContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                const targetHeader = document.getElementById(`cat-header-${catId}`);
+                if (targetHeader) {
+                    targetHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
         });
     });
     renderFloatingCategoryMenu();
@@ -596,11 +604,6 @@ function loadProducts(products) {
 
 function renderMenu() {
     let filteredProducts = [...menuProducts];
-    
-    // Filter by Category
-    if (currentCategory !== 'all') {
-        filteredProducts = filteredProducts.filter(p => p.categoryId === currentCategory);
-    }
     
     // Filter by Search Query
     if (searchQuery) {
@@ -705,6 +708,9 @@ function renderMenu() {
     
     // Bind Add & Qty button triggers
     bindMenuCartButtons();
+    
+    // Setup category scroll observer
+    setupCategoryObserver();
 }
 
 function bindMenuCartButtons() {
@@ -1081,6 +1087,50 @@ function renderFloatingCategoryMenu() {
             // Re-render floating list state
             renderFloatingCategoryMenu();
         });
+    });
+}
+
+function setupCategoryObserver() {
+    if (!('IntersectionObserver' in window)) return;
+    
+    const observerOptions = {
+        root: null,
+        rootMargin: '-15% 0px -75% 0px',
+        threshold: 0
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const catId = entry.target.id.replace('cat-header-', '');
+                
+                // Sync the active pill at the top
+                const pills = elements.categoriesList.querySelectorAll('.category-pill');
+                pills.forEach(p => {
+                    if (p.dataset.category === catId) {
+                        p.classList.add('active');
+                    } else {
+                        p.classList.remove('active');
+                    }
+                });
+                
+                // Sync the active item in the floating list
+                const floatList = document.getElementById('floatingCategoryList');
+                if (floatList) {
+                    floatList.querySelectorAll('.floating-menu-item').forEach(item => {
+                        if (item.dataset.category === catId) {
+                            item.classList.add('active');
+                        } else {
+                            item.classList.remove('active');
+                        }
+                    });
+                }
+            }
+        });
+    }, observerOptions);
+    
+    document.querySelectorAll('.menu-category-section').forEach(section => {
+        observer.observe(section);
     });
 }
 
