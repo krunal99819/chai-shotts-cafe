@@ -469,8 +469,8 @@ let unresolvedRequestCount = 0;
 function handleRequestsUpdate(requests) {
     allRequests = requests;
     
-    // Check if new requests have arrived to trigger audio notifications
-    const pending = requests.filter(r => r.status === 'pending');
+    // Check if new requests have arrived to trigger audio notifications (excluding feedback)
+    const pending = requests.filter(r => r.status === 'pending' && !r.type.startsWith('feedback:'));
     
     if (pending.length > unresolvedRequestCount) {
         const newest = pending[0]; // first item in sorted list
@@ -487,6 +487,7 @@ function handleRequestsUpdate(requests) {
     // Update metric counters and sidebar badge alert
     updateDashboardMetrics();
     renderRequestsQueue();
+    renderFeedbackTab();
     renderFloorLayoutMap(); // Redraw map to show notification dots on tables
 }
 
@@ -507,7 +508,7 @@ function updateDashboardMetrics() {
     elements.mActiveTables.innerText = `${runningTables.length} / 9`;
 
     // 4. Pending Requests
-    const pendingReqs = allRequests.filter(r => r.status === 'pending');
+    const pendingReqs = allRequests.filter(r => r.status === 'pending' && !r.type.startsWith('feedback:'));
     elements.mActiveRequests.innerText = pendingReqs.length;
 
     if (pendingReqs.length > 0) {
@@ -1040,7 +1041,7 @@ async function handleOrderActionClick(e) {
 // ==========================================================================
 
 function renderRequestsQueue() {
-    const pending = allRequests.filter(r => r.status === 'pending');
+    const pending = allRequests.filter(r => r.status === 'pending' && !r.type.startsWith('feedback:'));
     
     if (pending.length === 0) {
         elements.adminRequestsContainer.innerHTML = `
@@ -1096,6 +1097,82 @@ function renderRequestsQueue() {
             await db.requests.complete(reqId);
         });
     });
+}
+
+function renderFeedbackTab() {
+    const listEl = document.getElementById('feedbackTableBody');
+    if (!listEl) return;
+    
+    // Filter requests that are feedback (both pending and resolved to keep a permanent history log)
+    const feedbackRequests = allRequests.filter(r => r.type && r.type.startsWith('feedback:'));
+    
+    // Sort by Date (newest first)
+    feedbackRequests.sort((a, b) => b.createdAt - a.createdAt);
+    
+    if (feedbackRequests.length === 0) {
+        listEl.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align:center; padding:20px; color:var(--color-text-muted);">
+                    No customer feedback logs found.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    let html = "";
+    feedbackRequests.forEach(req => {
+        const dateStr = new Date(req.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+        const locLabel = req.locationLabel || `Table ${req.tableNumber}`;
+        
+        // Parse feedback details
+        const parsed = parseFeedbackType(req.type);
+        const foodStars = renderStars(parsed.foodRating);
+        const serviceStars = renderStars(parsed.serviceRating);
+        
+        html += `
+            <tr style="border-bottom: 1px solid var(--color-border);">
+                <td style="padding:12px; font-weight: 500;">${dateStr}</td>
+                <td style="padding:12px; font-weight: 700; color: var(--color-primary-deep);">${locLabel}</td>
+                <td style="padding:12px; text-align:center;">${foodStars}</td>
+                <td style="padding:12px; text-align:center;">${serviceStars}</td>
+                <td style="padding:12px; font-style: italic; color: #444; max-width: 350px; word-wrap: break-word; white-space: normal;">
+                    "${parsed.text}"
+                </td>
+            </tr>
+        `;
+    });
+    
+    listEl.innerHTML = html;
+}
+
+function parseFeedbackType(typeStr) {
+    const regex = /feedback:\s*Food\s*(\d)\*,\s*Service\s*(\d)\*\s*-\s*"(.*)"/;
+    const match = typeStr.match(regex);
+    if (match) {
+        return {
+            foodRating: parseInt(match[1]),
+            serviceRating: parseInt(match[2]),
+            text: match[3]
+        };
+    }
+    return {
+        foodRating: 0,
+        serviceRating: 0,
+        text: typeStr.replace('feedback:', '')
+    };
+}
+
+function renderStars(count) {
+    let stars = "";
+    for (let i = 1; i <= 5; i++) {
+        if (i <= count) {
+            stars += `<i class="fa-solid fa-star" style="color:var(--color-accent-gold); margin-right:2px;"></i>`;
+        } else {
+            stars += `<i class="fa-regular fa-star" style="color:#ccc; margin-right:2px;"></i>`;
+        }
+    }
+    return stars;
 }
 
 function getTimeAgoString(timestamp) {

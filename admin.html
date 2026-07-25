@@ -78,6 +78,9 @@
                 <li class="menu-item" data-target="tabAnalytics">
                     <button><i class="fa-solid fa-chart-line"></i> Sales Analytics</button>
                 </li>
+                <li class="menu-item" data-target="tabFeedback">
+                    <button><i class="fa-solid fa-star"></i> Customer Feedback</button>
+                </li>
                 <li class="menu-item" data-target="tabQrManager">
                     <button><i class="fa-solid fa-qrcode"></i> Table QR Codes</button>
                 </li>
@@ -528,6 +531,32 @@
                     </div>
                 </div>
 
+                <!-- 5.5 CUSTOMER FEEDBACK PANEL -->
+                <div id="tabFeedback" class="tab-content">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1.5px solid var(--color-border); padding-bottom:10px;">
+                        <h2 style="font-size:1.2rem; margin-bottom:0;"><i class="fa-solid fa-star"></i> Customer Feedback & Reviews</h2>
+                    </div>
+                    
+                    <div style="background-color: var(--color-bg-pure); border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; padding: 20px;">
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                                <thead>
+                                    <tr style="border-bottom: 2px solid var(--color-border); font-weight: bold; color: var(--color-primary-deep);">
+                                        <th style="padding: 12px 10px; width: 140px;">Date & Time</th>
+                                        <th style="padding: 12px 10px; width: 150px;">Location</th>
+                                        <th style="padding: 12px 10px; text-align: center; width: 130px;">Food Rating</th>
+                                        <th style="padding: 12px 10px; text-align: center; width: 130px;">Service Rating</th>
+                                        <th style="padding: 12px 10px;">Review / Feedback text</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="feedbackTableBody">
+                                    <!-- Loaded dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 6. QR CODE MANAGER PANEL -->
                 <div id="tabQrManager" class="tab-content">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1.5px solid var(--color-border); padding-bottom:10px;">
@@ -705,6 +734,6 @@
     <div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <!-- Application Script -->
-    <script type="module" src="js/admin.js?v=13"></script>
+    <script type="module" src="js/admin.js?v=14"></script>
 </body>
 </html>
