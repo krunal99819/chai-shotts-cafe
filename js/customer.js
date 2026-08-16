@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=12';
+import db, { cleanPhoneNumber } from './db.js?v=15';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -1580,9 +1580,14 @@ async function handleSubmitFeedback() {
     };
 
     try {
-        // Save in requests list as a completed feedback action log
         const loc = activeSession?.locationLabel || ("Table " + tableNumber);
-        await db.requests.add(tableNumber, `feedback: Food ${foodRating}*, Service ${serviceRating}* - "${feedbackVal}"`, loc);
+        const name = activeSession?.customerName || "N/A";
+        const phone = activeSession?.customerPhone || "N/A";
+        const zone = activeSession?.orderZone || "table";
+        
+        const feedbackString = `feedback: Name: ${name} | Phone: ${phone} | Zone: ${zone} | Food ${foodRating}* | Service ${serviceRating}* | Review: "${feedbackVal}"`;
+        
+        await db.requests.add(tableNumber, feedbackString, loc);
         elements.feedbackModal.classList.remove('open');
         alert("Thank you so much for your rating!");
         

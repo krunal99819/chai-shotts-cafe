@@ -8,10 +8,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper: Check if user has staff/admin role
+    // Helper: Check if user has staff/admin role safely
     // This assumes staff profiles are stored in /users/{userId}
     function isStaff() {
       return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'manager', 'kitchen', 'cashier']);
     }
 
@@ -56,6 +57,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.auth.uid == userId; // Allow staff setup
+    }
+
+    // Global Cafe Settings (GST & Timings)
+    match /settings/{settingsId} {
+      allow read: if true; // Publicly readable for customer timings and tax details
+      allow write: if isStaff(); // Editable only by staff
     }
   }
 }

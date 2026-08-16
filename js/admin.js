@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=12';
+import db, { cleanPhoneNumber } from './db.js?v=15';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -1112,7 +1112,7 @@ function renderFeedbackTab() {
     if (feedbackRequests.length === 0) {
         listEl.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align:center; padding:20px; color:var(--color-text-muted);">
+                <td colspan="8" style="text-align:center; padding:20px; color:var(--color-text-muted);">
                     No customer feedback logs found.
                 </td>
             </tr>
@@ -1130,13 +1130,21 @@ function renderFeedbackTab() {
         const foodStars = renderStars(parsed.foodRating);
         const serviceStars = renderStars(parsed.serviceRating);
         
+        // Map zone value to label
+        let zoneLabel = "Cafe";
+        if (parsed.zone === 'hotel') zoneLabel = "Hotel Room";
+        else if (parsed.zone === 'other') zoneLabel = "Takeaway";
+        
         html += `
             <tr style="border-bottom: 1px solid var(--color-border);">
                 <td style="padding:12px; font-weight: 500;">${dateStr}</td>
+                <td style="padding:12px; font-weight: 600;">${parsed.name}</td>
+                <td style="padding:12px; font-weight: 500; color:var(--color-text-muted);">${parsed.phone}</td>
+                <td style="padding:12px; font-weight: 600; color:#5c6f84;">${zoneLabel}</td>
                 <td style="padding:12px; font-weight: 700; color: var(--color-primary-deep);">${locLabel}</td>
                 <td style="padding:12px; text-align:center;">${foodStars}</td>
                 <td style="padding:12px; text-align:center;">${serviceStars}</td>
-                <td style="padding:12px; font-style: italic; color: #444; max-width: 350px; word-wrap: break-word; white-space: normal;">
+                <td style="padding:12px; font-style: italic; color: #444; max-width: 300px; word-wrap: break-word; white-space: normal;">
                     "${parsed.text}"
                 </td>
             </tr>
@@ -1147,16 +1155,38 @@ function renderFeedbackTab() {
 }
 
 function parseFeedbackType(typeStr) {
-    const regex = /feedback:\s*Food\s*(\d)\*,\s*Service\s*(\d)\*\s*-\s*"(.*)"/;
+    // Format: feedback: Name: Krunal | Phone: 7096267005 | Zone: table | Food 5* | Service 4* | Review: "Great food!"
+    const regex = /feedback:\s*Name:\s*(.*?)\s*\|\s*Phone:\s*(.*?)\s*\|\s*Zone:\s*(.*?)\s*\|\s*Food\s*(\d)\*\s*\|\s*Service\s*(\d)\*\s*\|\s*Review:\s*"(.*)"/;
     const match = typeStr.match(regex);
     if (match) {
         return {
-            foodRating: parseInt(match[1]),
-            serviceRating: parseInt(match[2]),
-            text: match[3]
+            name: match[1],
+            phone: match[2],
+            zone: match[3],
+            foodRating: parseInt(match[4]),
+            serviceRating: parseInt(match[5]),
+            text: match[6]
         };
     }
+    
+    // Fallback parser if it is an old feedback entry
+    const oldRegex = /feedback:\s*Food\s*(\d)\*,\s*Service\s*(\d)\*\s*-\s*"(.*)"/;
+    const oldMatch = typeStr.match(oldRegex);
+    if (oldMatch) {
+        return {
+            name: "N/A",
+            phone: "N/A",
+            zone: "table",
+            foodRating: parseInt(oldMatch[1]),
+            serviceRating: parseInt(oldMatch[2]),
+            text: oldMatch[3]
+        };
+    }
+    
     return {
+        name: "N/A",
+        phone: "N/A",
+        zone: "table",
         foodRating: 0,
         serviceRating: 0,
         text: typeStr.replace('feedback:', '')

@@ -699,11 +699,16 @@ export const db = {
                                 return { uid: newCredential.user.uid, email, ...adminData };
                             } catch (createError) {
                                 console.error("Auto-creation of admin failed:", createError);
+                                if (createError.code === 'auth/email-already-in-use') {
+                                    throw new Error("Incorrect password for the admin account. Please check the password and try again.");
+                                }
                                 if (createError.code === 'auth/operation-not-allowed') {
                                     throw new Error("Email/Password Sign-in method is disabled in Firebase console. Please go to Firebase Console > Authentication > Sign-in method and enable 'Email/Password'.");
                                 }
                                 throw createError;
                             }
+                        } else {
+                            throw new Error("Invalid email or password. Please try again.");
                         }
                     }
                     
