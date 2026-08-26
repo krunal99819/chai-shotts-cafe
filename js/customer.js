@@ -625,13 +625,13 @@ function renderMenu() {
         `;
         
         menuCategories.forEach(cat => {
-            const catImg = getCategoryImage(cat);
+            const catEmoji = getCategoryEmoji(cat);
             const count = menuProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false).length;
             
             gridHtml += `
                 <div class="category-grid-card" data-category="${cat.id}">
-                    <div class="category-grid-img-wrapper">
-                        <img src="${catImg}" alt="${cat.name}">
+                    <div class="category-grid-icon">
+                        ${catEmoji}
                     </div>
                     <div class="category-grid-info">
                         <h3>${cat.name}</h3>
@@ -851,43 +851,36 @@ function renderMenu() {
     bindMenuCartButtons();
 }
 
-function getCategoryImage(cat) {
+function getCategoryEmoji(cat) {
     const name = (cat.name || '').toLowerCase();
     
-    // Check keyword matches in order
-    if (name.includes('waffle')) {
-        return 'https://images.unsplash.com/photo-1562376502-6f769499c886?w=300';
-    }
-    if (name.includes('pancake')) {
-        return 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=300';
-    }
-    if (name.includes('pizza')) {
-        return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300';
-    }
-    if (name.includes('burger')) {
-        return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300';
-    }
-    if (name.includes('coffee') || name.includes('shake')) {
-        return 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?w=300';
-    }
-    if (name.includes('chai') || name.includes('tea')) {
-        return 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300';
-    }
-    if (name.includes('maggi') || name.includes('noodle') || name.includes('pasta')) {
-        return 'https://images.unsplash.com/photo-1612966608997-300e84bc9103?w=300';
-    }
-    if (name.includes('fries') || name.includes('snack') || name.includes('nugget')) {
-        return 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=300';
-    }
-    if (name.includes('mocktail') || name.includes('drink') || name.includes('soda')) {
-        return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300';
-    }
-    if (name.includes('combo') || name.includes('offer')) {
-        return 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=300';
-    }
+    if (name.includes('waffle')) return '🧇';
+    if (name.includes('pancake')) return '🥞';
+    if (name.includes('pizza')) return '🍕';
+    if (name.includes('burger')) return '🍔';
+    if (name.includes('sandwich')) return '🥪';
+    if (name.includes('coffee') || name.includes('shake')) return '☕';
+    if (name.includes('chai') || name.includes('tea')) return '🍵';
+    if (name.includes('maggi') || name.includes('noodle')) return '🍜';
+    if (name.includes('pasta')) return '🍝';
+    if (name.includes('fries')) return '🍟';
+    if (name.includes('snack') || name.includes('nugget')) return '🍗';
+    if (name.includes('mocktail') || name.includes('drink') || name.includes('soda') || name.includes('juice')) return '🍹';
+    if (name.includes('combo') || name.includes('offer')) return '🎁';
+    if (name.includes('ice') || name.includes('cream') || name.includes('kulfi')) return '🍦';
+    if (name.includes('cake') || name.includes('dessert') || name.includes('sweet')) return '🍰';
+    if (name.includes('wrap') || name.includes('roll')) return '🌯';
+    if (name.includes('salad')) return '🥗';
+    if (name.includes('soup')) return '🍲';
+    if (name.includes('toast') || name.includes('bread')) return '🍞';
+    if (name.includes('dosa') || name.includes('south')) return '🫓';
+    if (name.includes('biryani') || name.includes('rice')) return '🍚';
+    if (name.includes('thali') || name.includes('meal')) return '🍱';
+    if (name.includes('chaat') || name.includes('pani')) return '🥘';
+    if (name.includes('momo') || name.includes('dumpling')) return '🥟';
     
-    // Fallback default image
-    return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300';
+    // Fallback
+    return '🍽️';
 }
 
 function bindMenuCartButtons() {
