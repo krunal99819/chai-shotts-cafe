@@ -584,14 +584,12 @@ function loadCategories(categories) {
             pill.classList.add('active');
             const catId = pill.dataset.category;
             
-            if (catId === 'all') {
-                elements.menuContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else {
-                const targetHeader = document.getElementById(`cat-header-${catId}`);
-                if (targetHeader) {
-                    targetHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            }
+            currentCategory = catId;
+            renderMenu();
+            renderFloatingCategoryMenu();
+            
+            // Scroll to menu top
+            elements.menuContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
     renderFloatingCategoryMenu();
@@ -614,19 +612,118 @@ function renderMenu() {
         );
     }
 
-    if (filteredProducts.length === 0) {
-        elements.menuContainer.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; color: var(--color-text-muted);">
-                <i class="fa-solid fa-cookie-bite" style="font-size: 2.5rem; margin-bottom: 12px; color: var(--color-accent-gold);"></i>
-                <p>No items found. Try searching for something else!</p>
+    // 1. If we are in "All Categories" view and NOT searching, show the Category Grid
+    if (currentCategory === 'all' && !searchQuery) {
+        // Hide horizontal categories bar wrappers
+        const catWrapper = document.querySelector('.categories-wrapper');
+        if (catWrapper) catWrapper.style.display = 'none';
+        
+        let gridHtml = `
+            <div class="explore-menu-section animate-fade-in-up">
+                <h2 class="explore-menu-title">Explore Menu</h2>
+                <div class="category-grid">
+        `;
+        
+        menuCategories.forEach(cat => {
+            const catImg = getCategoryImage(cat);
+            const count = menuProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false).length;
+            
+            gridHtml += `
+                <div class="category-grid-card" data-category="${cat.id}">
+                    <div class="category-grid-img-wrapper">
+                        <img src="${catImg}" alt="${cat.name}">
+                    </div>
+                    <div class="category-grid-info">
+                        <h3>${cat.name}</h3>
+                        <span>${count} Items</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        gridHtml += `
+                </div>
             </div>
         `;
+        
+        elements.menuContainer.innerHTML = gridHtml;
+        
+        // Bind click listeners to grid cards
+        elements.menuContainer.querySelectorAll('.category-grid-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const catId = card.dataset.category;
+                currentCategory = catId;
+                
+                // Show horizontal categories bar wrapper
+                if (catWrapper) catWrapper.style.display = 'block';
+                
+                // Sync active horizontal pill
+                const pills = elements.categoriesList.querySelectorAll('.category-pill');
+                pills.forEach(p => {
+                    if (p.dataset.category === catId) {
+                        p.classList.add('active');
+                        p.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    } else {
+                        p.classList.remove('active');
+                    }
+                });
+                
+                renderMenu();
+                renderFloatingCategoryMenu();
+                // Scroll to top
+                elements.menuContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+        
         return;
     }
 
-    // Group items by category to make a beautiful menu layout
+    // 2. If a specific category is selected, or we are searching:
+    // Show horizontal categories bar wrapper
+    const catWrapper = document.querySelector('.categories-wrapper');
+    if (catWrapper) catWrapper.style.display = 'block';
+    
+    // Filter by selected category (if not searching)
+    let displayProducts = filteredProducts;
+    if (currentCategory !== 'all' && !searchQuery) {
+        displayProducts = filteredProducts.filter(p => p.categoryId === currentCategory);
+    }
+    
+    if (displayProducts.length === 0) {
+        let backBtnHTML = "";
+        if (currentCategory !== 'all' || searchQuery) {
+            backBtnHTML = `<button class="btn-back-categories" style="background:var(--color-primary-deep); color:white; border:none; padding:8px 16px; border-radius:var(--radius-sm); font-weight:600; cursor:pointer; margin-top:12px;"><i class="fa-solid fa-arrow-left"></i> Back to Categories</button>`;
+        }
+        elements.menuContainer.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: var(--color-text-muted);">
+                <i class="fa-solid fa-cookie-bite" style="font-size: 2.5rem; margin-bottom: 12px; color: var(--color-accent-gold);"></i>
+                <p>No items found.</p>
+                ${backBtnHTML}
+            </div>
+        `;
+        
+        const btnBack = elements.menuContainer.querySelector('.btn-back-categories');
+        if (btnBack) {
+            btnBack.addEventListener('click', () => {
+                currentCategory = 'all';
+                searchQuery = '';
+                if (elements.menuSearch) elements.menuSearch.value = '';
+                // Sync active horizontal pill
+                const pills = elements.categoriesList.querySelectorAll('.category-pill');
+                pills.forEach(p => {
+                    if (p.dataset.category === 'all') p.classList.add('active');
+                    else p.classList.remove('active');
+                });
+                renderMenu();
+                renderFloatingCategoryMenu();
+            });
+        }
+        return;
+    }
+
+    // Group items by category for rendering
     const productsByCategory = {};
-    filteredProducts.forEach(prod => {
+    displayProducts.forEach(prod => {
         if (!productsByCategory[prod.categoryId]) {
             productsByCategory[prod.categoryId] = [];
         }
@@ -635,15 +732,37 @@ function renderMenu() {
 
     let html = "";
     
-    // Order categories as defined in categories collection
+    // If a specific category is selected, render a "Back" header block
+    if (currentCategory !== 'all' && !searchQuery) {
+        const catObj = menuCategories.find(c => c.id === currentCategory);
+        const catName = catObj ? catObj.name : "Category";
+        html += `
+            <div class="category-header-bar animate-fade-in-up" style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+                <button class="btn-back-categories-header" style="background:none; border:none; font-size:0.85rem; color:var(--color-primary-deep); cursor:pointer; padding:6px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--color-border); font-weight:700; display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-arrow-left"></i> All Categories
+                </button>
+                <h2 style="font-size:1.1rem; font-weight:800; color:var(--color-primary-deep); margin:0;">${catName}</h2>
+            </div>
+        `;
+    } else if (searchQuery) {
+        html += `
+            <div class="category-header-bar animate-fade-in-up" style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+                <button class="btn-back-categories-header" style="background:none; border:none; font-size:0.85rem; color:var(--color-primary-deep); cursor:pointer; padding:6px 12px; border-radius:var(--radius-sm); border:1.5px solid var(--color-border); font-weight:700; display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-arrow-left"></i> Clear Search
+                </button>
+                <h2 style="font-size:1.1rem; font-weight:800; color:var(--color-primary-deep); margin:0;">Search Results</h2>
+            </div>
+        `;
+    }
+
+    // Render category list section
     const orderedCategories = [...menuCategories];
-    
     orderedCategories.forEach(cat => {
         const items = productsByCategory[cat.id];
         if (items && items.length > 0) {
             html += `
                 <div class="menu-category-section animate-fade-in-up" id="cat-header-${cat.id}">
-                    <h2 class="section-title">
+                    <h2 class="section-title" style="margin-top:0;">
                         ${cat.name} <span>${items.length} Items</span>
                     </h2>
                     <div class="product-list">
@@ -707,11 +826,68 @@ function renderMenu() {
 
     elements.menuContainer.innerHTML = html;
     
+    // Bind back button trigger in header
+    const btnBackHeader = elements.menuContainer.querySelector('.btn-back-categories-header');
+    if (btnBackHeader) {
+        btnBackHeader.addEventListener('click', () => {
+            currentCategory = 'all';
+            if (searchQuery) {
+                searchQuery = '';
+                if (elements.menuSearch) elements.menuSearch.value = '';
+            }
+            
+            // Sync active horizontal pill
+            const pills = elements.categoriesList.querySelectorAll('.category-pill');
+            pills.forEach(p => {
+                if (p.dataset.category === 'all') p.classList.add('active');
+                else p.classList.remove('active');
+            });
+            renderMenu();
+            renderFloatingCategoryMenu();
+        });
+    }
+
     // Bind Add & Qty button triggers
     bindMenuCartButtons();
+}
+
+function getCategoryImage(cat) {
+    const name = (cat.name || '').toLowerCase();
     
-    // Setup category scroll observer
-    setupCategoryObserver();
+    // Check keyword matches in order
+    if (name.includes('waffle')) {
+        return 'https://images.unsplash.com/photo-1562376502-6f769499c886?w=300';
+    }
+    if (name.includes('pancake')) {
+        return 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=300';
+    }
+    if (name.includes('pizza')) {
+        return 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300';
+    }
+    if (name.includes('burger')) {
+        return 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300';
+    }
+    if (name.includes('coffee') || name.includes('shake')) {
+        return 'https://images.unsplash.com/photo-1541658016709-82535e94bc69?w=300';
+    }
+    if (name.includes('chai') || name.includes('tea')) {
+        return 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300';
+    }
+    if (name.includes('maggi') || name.includes('noodle') || name.includes('pasta')) {
+        return 'https://images.unsplash.com/photo-1612966608997-300e84bc9103?w=300';
+    }
+    if (name.includes('fries') || name.includes('snack') || name.includes('nugget')) {
+        return 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=300';
+    }
+    if (name.includes('mocktail') || name.includes('drink') || name.includes('soda')) {
+        return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300';
+    }
+    if (name.includes('combo') || name.includes('offer')) {
+        return 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=300';
+    }
+    
+    // Fallback default image
+    return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300';
 }
 
 function bindMenuCartButtons() {
