@@ -628,6 +628,9 @@ function renderMenu() {
             const catEmoji = getCategoryEmoji(cat);
             const count = menuProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false).length;
             
+            // Skip categories with no available items
+            if (count === 0) return;
+            
             gridHtml += `
                 <div class="category-grid-card" data-category="${cat.id}">
                     <div class="category-grid-icon">
@@ -857,7 +860,7 @@ const CATEGORY_ORDER = [
     'waffle',         // 1    Waffles
     'mini',           // 2    Mini
     'nacho',          // 3    Nachos
-    'satter',         // 3.1  Satter's
+    'starter',        // 3.1  Starter's
     'sandwich',       // 3.2  Sandwich
     'pancake',        // 4    Pancake
     'burger',         // 5    Burger
@@ -893,11 +896,11 @@ function getSortedCategories() {
 function getCategoryEmoji(cat) {
     const name = (cat.name || '').toLowerCase();
     
-    if (name.includes('savan') || name.includes('special')) return '⭐';
+    if (name.includes('savan')) return '⭐';
     if (name.includes('waffle')) return '🧇';
     if (name.includes('mini')) return '🍢';
     if (name.includes('nacho')) return '🌮';
-    if (name.includes('satter')) return '🥘';
+    if (name.includes('starter')) return '🥘';
     if (name.includes('sandwich')) return '🥪';
     if (name.includes('pancake')) return '🥞';
     if (name.includes('burger')) return '🍔';
