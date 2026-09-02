@@ -571,7 +571,7 @@ function loadCategories(categories) {
     
     // Add "All Items" Category pill
     let html = `<button class="category-pill active" data-category="all">All</button>`;
-    menuCategories.forEach(cat => {
+    getSortedCategories().forEach(cat => {
         html += `<button class="category-pill" data-category="${cat.id}">${cat.name}</button>`;
     });
     elements.categoriesList.innerHTML = html;
@@ -624,7 +624,7 @@ function renderMenu() {
                 <div class="category-grid">
         `;
         
-        menuCategories.forEach(cat => {
+        getSortedCategories().forEach(cat => {
             const catEmoji = getCategoryEmoji(cat);
             const count = menuProducts.filter(p => p.categoryId === cat.id && p.isAvailable !== false).length;
             
@@ -756,7 +756,7 @@ function renderMenu() {
     }
 
     // Render category list section
-    const orderedCategories = [...menuCategories];
+    const orderedCategories = getSortedCategories();
     orderedCategories.forEach(cat => {
         const items = productsByCategory[cat.id];
         if (items && items.length > 0) {
@@ -851,33 +851,73 @@ function renderMenu() {
     bindMenuCartButtons();
 }
 
+// ── Category display order (matches owner's desired menu sequence) ──
+const CATEGORY_ORDER = [
+    'savan',          // 0.1  Savan Special
+    'waffle',         // 1    Waffles
+    'mini',           // 2    Mini
+    'nacho',          // 3    Nachos
+    'satter',         // 3.1  Satter's
+    'sandwich',       // 3.2  Sandwich
+    'pancake',        // 4    Pancake
+    'burger',         // 5    Burger
+    'pizza',          // 6    Pizza
+    'garlic',         // 7    Garlic Bread
+    'fries',          // 8    Fries
+    'maggi',          // 9    Maggie
+    'samosa',         // 10   Samosa
+    'momo',           // 11   Fry Momos
+    'fruit',          // 11.1 Fruit Shots
+    'brownie',        // 12   Brownies
+    'shake',          // 13   Shakes
+    'cold coffee',    // 14   Cold Coffee
+    'mojito',         // 14.1 Mojitos & Special Drinks
+    'cold drink',     // 14.2 Cold Drinks
+    'tea',            // 15   Tea & Coffee
+];
+
+function getSortedCategories() {
+    return [...menuCategories].sort((a, b) => {
+        const aName = (a.name || '').toLowerCase();
+        const bName = (b.name || '').toLowerCase();
+        let aIdx = CATEGORY_ORDER.length;
+        let bIdx = CATEGORY_ORDER.length;
+        for (let i = 0; i < CATEGORY_ORDER.length; i++) {
+            if (aIdx === CATEGORY_ORDER.length && aName.includes(CATEGORY_ORDER[i])) aIdx = i;
+            if (bIdx === CATEGORY_ORDER.length && bName.includes(CATEGORY_ORDER[i])) bIdx = i;
+        }
+        return aIdx - bIdx;
+    });
+}
+
 function getCategoryEmoji(cat) {
     const name = (cat.name || '').toLowerCase();
     
+    if (name.includes('savan') || name.includes('special')) return '⭐';
     if (name.includes('waffle')) return '🧇';
-    if (name.includes('pancake')) return '🥞';
-    if (name.includes('pizza')) return '🍕';
-    if (name.includes('burger')) return '🍔';
+    if (name.includes('mini')) return '🍢';
+    if (name.includes('nacho')) return '🌮';
+    if (name.includes('satter')) return '🥘';
     if (name.includes('sandwich')) return '🥪';
-    if (name.includes('coffee') || name.includes('shake')) return '☕';
-    if (name.includes('chai') || name.includes('tea')) return '🍵';
-    if (name.includes('maggi') || name.includes('noodle')) return '🍜';
-    if (name.includes('pasta')) return '🍝';
+    if (name.includes('pancake')) return '🥞';
+    if (name.includes('burger')) return '🍔';
+    if (name.includes('pizza')) return '🍕';
+    if (name.includes('garlic') || name.includes('bread')) return '🍞';
     if (name.includes('fries')) return '🍟';
-    if (name.includes('snack') || name.includes('nugget')) return '🍗';
-    if (name.includes('mocktail') || name.includes('drink') || name.includes('soda') || name.includes('juice')) return '🍹';
+    if (name.includes('maggi') || name.includes('noodle')) return '🍜';
+    if (name.includes('samosa')) return '🔶';
+    if (name.includes('momo') || name.includes('dumpling')) return '🥟';
+    if (name.includes('fruit') || name.includes('shot')) return '🍓';
+    if (name.includes('brownie')) return '🍫';
+    if (name.includes('shake')) return '🥤';
+    if (name.includes('cold coffee')) return '🧋';
+    if (name.includes('mojito') || name.includes('special drink')) return '🍹';
+    if (name.includes('cold drink') || name.includes('soda')) return '🥂';
+    if (name.includes('chai') || name.includes('tea') || name.includes('coffee')) return '☕';
+    if (name.includes('pasta')) return '🍝';
     if (name.includes('combo') || name.includes('offer')) return '🎁';
     if (name.includes('ice') || name.includes('cream') || name.includes('kulfi')) return '🍦';
-    if (name.includes('cake') || name.includes('dessert') || name.includes('sweet')) return '🍰';
-    if (name.includes('wrap') || name.includes('roll')) return '🌯';
-    if (name.includes('salad')) return '🥗';
-    if (name.includes('soup')) return '🍲';
-    if (name.includes('toast') || name.includes('bread')) return '🍞';
-    if (name.includes('dosa') || name.includes('south')) return '🫓';
-    if (name.includes('biryani') || name.includes('rice')) return '🍚';
-    if (name.includes('thali') || name.includes('meal')) return '🍱';
-    if (name.includes('chaat') || name.includes('pani')) return '🥘';
-    if (name.includes('momo') || name.includes('dumpling')) return '🥟';
+    if (name.includes('cake') || name.includes('dessert')) return '🍰';
     
     // Fallback
     return '🍽️';
@@ -1205,7 +1245,7 @@ function renderFloatingCategoryMenu() {
         </div>
     `;
     
-    menuCategories.forEach(cat => {
+    getSortedCategories().forEach(cat => {
         const count = menuProducts.filter(p => p.categoryId === cat.id).length;
         const active = currentCategory === cat.id ? 'active' : '';
         html += `
