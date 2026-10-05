@@ -90,6 +90,32 @@ const elements = {
 };
 
 // ==========================================================================
+// CUSTOMER TOAST MESSAGES
+// ==========================================================================
+function showToast(message, type="success") {
+    let container = document.getElementById('customerToastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'customerToastContainer';
+        container.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; display:flex; flex-direction:column; gap:10px; width:90%; max-width:400px; pointer-events:none;';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    const bgColor = type === 'error' ? '#dc3545' : '#1f5e3b';
+    toast.style.cssText = `background-color: ${bgColor}; color: white; padding: 12px 16px; border-radius: 8px; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); text-align: center; opacity: 0; transition: opacity 0.3s; pointer-events:auto; font-family: 'Poppins', sans-serif; line-height: 1.4;`;
+    toast.innerHTML = message;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => toast.style.opacity = '1', 10);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+// ==========================================================================
 // 1. APPLICATION INITIALIZATION & ROUTING
 // ==========================================================================
 
@@ -137,6 +163,10 @@ async function initApp() {
                 
                 listenToSessionChanges(savedSession.id);
                 syncRunningBill();
+                
+                const welcomeUserText = document.getElementById('welcomeUserText');
+                if (welcomeUserText) welcomeUserText.innerText = `Welcome, ${savedSession.customerName.split(' ')[0]}!`;
+                
                 sessionRestored = true;
             } else {
                 localStorage.removeItem('cs_active_session_id');
@@ -389,7 +419,10 @@ async function handleCreateSession() {
                 elements.customerInfoModal.classList.remove('open');
                 listenToSessionChanges(activeLocationSess.id);
                 syncRunningBill();
-                alert(`Welcome back, ${name}! Rejoining your active session for ${locationLabel}.`);
+                
+                const welcomeUserText = document.getElementById('welcomeUserText');
+                if (welcomeUserText) welcomeUserText.innerText = `Welcome, ${name.split(' ')[0]}!`;
+                
                 return;
             } else {
                 elements.btnStartSession.innerHTML = '<i class="fa-solid fa-clock"></i> Waiting for Admin Approval...';
@@ -420,9 +453,12 @@ async function handleCreateSession() {
                         elements.customerInfoModal.classList.remove('open');
                         listenToSessionChanges(activeLocationSess.id);
                         syncRunningBill();
-                        alert(`Joined active session started by ${activeLocationSess.customerName}. You can now order together!`);
+                        
+                        const welcomeUserText = document.getElementById('welcomeUserText');
+                        if (welcomeUserText) welcomeUserText.innerText = `Welcome, ${name.split(' ')[0]}!`;
+                        
                     } else {
-                        alert(`Request to join ${locationLabel} was rejected by Admin.\nPlease choose an available table.`);
+                        showToast(`Request to join ${locationLabel} was rejected by Admin. Please choose an available table.`, 'error');
                         elements.custTableInput.value = "";
                         
                         // Add red notice
@@ -447,14 +483,16 @@ async function handleCreateSession() {
         localStorage.setItem('cs_active_session_id', session.id);
         elements.customerInfoModal.classList.remove('open');
         listenToSessionChanges(session.id);
-        alert(`Welcome, ${name}! Your ordering session is active for ${locationLabel}.`);
+        
+        const welcomeUserText = document.getElementById('welcomeUserText');
+        if (welcomeUserText) welcomeUserText.innerText = `Welcome, ${name.split(' ')[0]}!`;
         
         let notice = document.getElementById('tableNoticeMsg');
         if (notice) notice.remove();
         
     } catch (e) {
         console.error(e);
-        alert("Failed to start session. Please try again.");
+        showToast("Failed to start session. Please try again.", 'error');
     } finally {
         elements.btnStartSession.disabled = false;
         elements.btnStartSession.innerHTML = originalBtnText;
