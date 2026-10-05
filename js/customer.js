@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=15';
+import db, { cleanPhoneNumber } from './db.js?v=20';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -106,10 +106,18 @@ async function initApp() {
     const savedSessionId = localStorage.getItem('cs_active_session_id');
     let sessionRestored = false;
     
+    // Parse Table Number from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const tableParam = urlParams.get('table');
+
     if (savedSessionId) {
         try {
             const savedSession = await db.sessions.getSession(savedSessionId);
-            if (savedSession && savedSession.status === 'open') {
+            
+            // If scanning a NEW table, ignore the old saved session
+            if (tableParam && savedSession && savedSession.tableNumber !== parseInt(tableParam)) {
+                localStorage.removeItem('cs_active_session_id');
+            } else if (savedSession && savedSession.status === 'open') {
                 activeSession = savedSession;
                 tableNumber = savedSession.tableNumber;
                 
@@ -138,10 +146,6 @@ async function initApp() {
             localStorage.removeItem('cs_active_session_id');
         }
     }
-    
-    // Parse Table Number from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const tableParam = urlParams.get('table');
     
     if (!sessionRestored) {
         if (tableParam) {
@@ -304,94 +308,81 @@ function setupEventListeners() {
 // ==========================================================================
 
 async function checkActiveSession() {
-    const session = await db.sessions.getActive(tableNumber);
-    if (session) {
-        activeSession = session;
-        // Hide name prompt if session already exists
-        elements.customerInfoModal.classList.remove('open');
-        // Retrieve and listen to table session changes
-        listenToSessionChanges(session.id);
-        // Sync previously ordered items in running bill
-        syncRunningBill();
-    } else {
-        // Prompt for Customer Registration
-        elements.customerInfoModal.classList.add('open');
-    }
+    // We no longer silently adopt the active session here.
+    // Instead, we force the user to enter their name/phone.
+    // handleCreateSession() will take care of joining or rejecting.
+    elements.customerInfoModal.classList.add('open');
 }
 
 async function handleCreateSession() {
-    if (!isStoreOpen(globalSettings)) {
-        const start = globalSettings.startTime || "12:00";
-        const end = globalSettings.endTime || "01:00";
-        alert(`Chai Shotts is currently closed.\nOnline Ordering hours: ${formatTime12h(start)} to ${formatTime12h(end)}.\nOrders can only be accepted during these hours unless manual overrides are enabled.`);
-        return;
-    }
-
-    const name = elements.custNameInput.value.trim();
-    const phone = elements.custPhoneInput.value.trim();
-    const zone = elements.orderZoneSelect.value;
-    const cleanedPhone = cleanPhoneNumber(phone);
+    const originalBtnText = elements.btnStartSession.innerHTML;
+    elements.btnStartSession.disabled = true;
+    elements.btnStartSession.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
     
-    if (!name) {
-        alert("Please enter your name to start ordering.");
-        return;
-    }
-
-    if (!cleanedPhone || cleanedPhone.length !== 10) {
-        alert("Please enter a valid 10-digit Mobile Number (compulsory to start ordering).");
-        return;
-    }
-
-    let localTableNum = 0;
-    let locationLabel = "";
-
-    if (zone === 'table') {
-        const tableVal = parseInt(elements.custTableInput.value);
-        if (!tableVal || tableVal < 1 || tableVal > 9) {
-            alert("Please enter a valid Table Number between 1 and 9.");
-            return;
-        }
-        localTableNum = tableVal;
-        locationLabel = `Table ${localTableNum}`;
-    } else if (zone === 'hotel') {
-        const room = elements.hotelRoomInput.value.trim();
-        if (!room) {
-            alert("Please enter your Room Number.");
-            return;
-        }
-        // Extract room number digits and validate between 201 and 216
-        const roomNum = parseInt(room.replace(/\D/g, ''));
-        if (isNaN(roomNum) || roomNum < 201 || roomNum > 216) {
-            alert("Only Room Numbers between 201 and 216 are allowed for Hotel Relax Inn.");
-            return;
-        }
-        localTableNum = 10; // Virtual table ID for Hotel Partner
-        locationLabel = `Room ${roomNum} (HOTEL RELAX INN)`;
-    } else if (zone === 'other') {
-        const place = elements.otherPlaceInput.value.trim();
-        if (!place) {
-            alert("Please specify your place/address.");
-            return;
-        }
-        localTableNum = 11; // Virtual table ID for Outside Deliveries
-        locationLabel = `${place} (Takeaway/Delivery)`;
-    }
-
-    tableNumber = localTableNum;
-    elements.tableIndicator.innerHTML = `<i class="fa-solid fa-location-dot"></i> ${locationLabel}`;
-
     try {
-        // Check if there is already an active session for this table or hotel room
-        const sessions = await new Promise(resolve => {
-            db.sessions.listen(allSess => {
-                resolve(allSess.filter(s => s.status === 'open'));
-            });
-        });
+        if (!isStoreOpen(globalSettings)) {
+            const start = globalSettings.startTime || "12:00";
+            const end = globalSettings.endTime || "01:00";
+            alert(`Chai Shotts is currently closed.\nOnline Ordering hours: ${formatTime12h(start)} to ${formatTime12h(end)}.\nOrders can only be accepted during these hours unless manual overrides are enabled.`);
+            return;
+        }
+
+        const name = elements.custNameInput.value.trim();
+        const phone = elements.custPhoneInput.value.trim();
+        const zone = elements.orderZoneSelect.value;
+        const cleanedPhone = cleanPhoneNumber(phone);
         
+        if (!name) {
+            alert("Please enter your name to start ordering.");
+            return;
+        }
+
+        if (!cleanedPhone || cleanedPhone.length !== 10) {
+            alert("Please enter a valid 10-digit Mobile Number (compulsory to start ordering).");
+            return;
+        }
+
+        let localTableNum = 0;
+        let locationLabel = "";
+
+        if (zone === 'table') {
+            const tableVal = parseInt(elements.custTableInput.value);
+            if (!tableVal || tableVal < 1 || tableVal > 9) {
+                alert("Please enter a valid Table Number between 1 and 9.");
+                return;
+            }
+            localTableNum = tableVal;
+            locationLabel = `Table ${localTableNum}`;
+        } else if (zone === 'hotel') {
+            const room = elements.hotelRoomInput.value.trim();
+            if (!room) {
+                alert("Please enter your Room Number.");
+                return;
+            }
+            const roomNum = parseInt(room.replace(/\D/g, ''));
+            if (isNaN(roomNum) || roomNum < 201 || roomNum > 216) {
+                alert("Only Room Numbers between 201 and 216 are allowed for Hotel Relax Inn.");
+                return;
+            }
+            localTableNum = 10;
+            locationLabel = `Room ${roomNum} (HOTEL RELAX INN)`;
+        } else if (zone === 'other') {
+            const place = elements.otherPlaceInput.value.trim();
+            if (!place) {
+                alert("Please specify your place/address.");
+                return;
+            }
+            localTableNum = 11;
+            locationLabel = `${place} (Takeaway/Delivery)`;
+        }
+
+        tableNumber = localTableNum;
+        elements.tableIndicator.innerHTML = `<i class="fa-solid fa-location-dot"></i> ${locationLabel}`;
+
+        const sessions = await db.sessions.getAllOpen();
         const activeLocationSess = sessions.find(s => s.tableNumber === localTableNum && (localTableNum < 10 ? true : s.locationLabel.toLowerCase() === locationLabel.toLowerCase()));
         
         if (activeLocationSess) {
-            // Rejoining own session if name matches
             if (activeLocationSess.customerName.toLowerCase() === name.toLowerCase()) {
                 activeSession = activeLocationSess;
                 localStorage.setItem('cs_active_session_id', activeLocationSess.id);
@@ -401,27 +392,53 @@ async function handleCreateSession() {
                 alert(`Welcome back, ${name}! Rejoining your active session for ${locationLabel}.`);
                 return;
             } else {
-                // Different name! Ask to join the session
-                const join = confirm(`${locationLabel} already has an active ordering session started by ${activeLocationSess.customerName}.\n\nWould you like to join their group and order together on the same bill?`);
-                if (join) {
-                    activeSession = activeLocationSess;
-                    localStorage.setItem('cs_active_session_id', activeLocationSess.id);
-                    elements.customerInfoModal.classList.remove('open');
-                    listenToSessionChanges(activeLocationSess.id);
-                    syncRunningBill();
-                    alert(`Joined active session started by ${activeLocationSess.customerName}. You can now order together!`);
-                    return;
-                } else {
-                    // Send notification to Admin that another person is trying to access the same table/room!
-                    try {
-                        await db.requests.add(localTableNum, `duplicate_session:${name} tried to access this location, but declined joining ${activeLocationSess.customerName}'s session.`, locationLabel);
-                    } catch (err) {
-                        console.error("Failed to notify admin of duplicate session access: ", err);
+                elements.btnStartSession.innerHTML = '<i class="fa-solid fa-clock"></i> Waiting for Admin Approval...';
+                
+                // Submit join request
+                const reqId = await db.requests.add(localTableNum, "join_session", locationLabel, {
+                    joinName: name,
+                    joinPhone: cleanedPhone,
+                    joinZone: zone,
+                    sessionId: activeLocationSess.id
+                });
+                
+                // Wait for admin approval
+                await new Promise((resolve, reject) => {
+                    const unsub = db.requests.listenOne(reqId, (reqData) => {
+                        if (reqData.status === 'completed') { // Admin approved
+                            unsub();
+                            resolve(true);
+                        } else if (reqData.status === 'rejected') { // Admin rejected
+                            unsub();
+                            resolve(false);
+                        }
+                    });
+                }).then(async (approved) => {
+                    if (approved) {
+                        activeSession = activeLocationSess;
+                        localStorage.setItem('cs_active_session_id', activeLocationSess.id);
+                        elements.customerInfoModal.classList.remove('open');
+                        listenToSessionChanges(activeLocationSess.id);
+                        syncRunningBill();
+                        alert(`Joined active session started by ${activeLocationSess.customerName}. You can now order together!`);
+                    } else {
+                        alert(`Request to join ${locationLabel} was rejected by Admin.\nPlease choose an available table.`);
+                        elements.custTableInput.value = "";
+                        
+                        // Add red notice
+                        let notice = document.getElementById('tableNoticeMsg');
+                        if (!notice) {
+                            notice = document.createElement('div');
+                            notice.id = 'tableNoticeMsg';
+                            notice.style.color = 'red';
+                            notice.style.fontSize = '0.85rem';
+                            notice.style.marginTop = '4px';
+                            elements.custTableInput.parentNode.appendChild(notice);
+                        }
+                        notice.innerText = `Change table number because ${locationLabel} is already occupied.`;
                     }
-                    // Do not allow starting a duplicate active session on the same occupied location
-                    alert(`Cannot start a new session on ${locationLabel} while it is occupied. Please wait or select another table.`);
-                    return;
-                }
+                });
+                return;
             }
         }
 
@@ -431,9 +448,16 @@ async function handleCreateSession() {
         elements.customerInfoModal.classList.remove('open');
         listenToSessionChanges(session.id);
         alert(`Welcome, ${name}! Your ordering session is active for ${locationLabel}.`);
+        
+        let notice = document.getElementById('tableNoticeMsg');
+        if (notice) notice.remove();
+        
     } catch (e) {
         console.error(e);
         alert("Failed to start session. Please try again.");
+    } finally {
+        elements.btnStartSession.disabled = false;
+        elements.btnStartSession.innerHTML = originalBtnText;
     }
 }
 

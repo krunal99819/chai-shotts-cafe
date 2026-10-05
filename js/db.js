@@ -371,6 +371,17 @@ export const db = {
                 return found || null;
             }
         },
+        async getAllOpen() {
+            if (firebaseInitialized) {
+                const { collection, getDocs, query, where, orderBy } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const q = query(collection(firestore, 'sessions'), where('status', '==', 'open'));
+                const snapshot = await getDocs(q);
+                return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.createdAt - a.createdAt);
+            } else {
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                return sessions.filter(s => s.status === 'open').sort((a, b) => b.createdAt - a.createdAt);
+            }
+        },
         async getActive(tableNumber) {
             tableNumber = parseInt(tableNumber);
             if (firebaseInitialized) {
@@ -545,14 +556,24 @@ export const db = {
                 for (const d of snapshot.docs) {
                     const orderData = d.data();
                     let updated = false;
-                    const items = orderData.items.map(item => {
-                        if (item.productId === productId && !quantityUpdated) {
-                            item.quantity = newQty;
-                            updated = true;
-                            quantityUpdated = true;
+                    
+                    const items = [];
+                    for (const item of orderData.items) {
+                        if (item.productId === productId) {
+                            if (!quantityUpdated) {
+                                // First occurrence: update quantity
+                                item.quantity = newQty;
+                                items.push(item);
+                                updated = true;
+                                quantityUpdated = true;
+                            } else {
+                                // Subsequent occurrences: filter out (ghost items)
+                                updated = true;
+                            }
+                        } else {
+                            items.push(item);
                         }
-                        return item;
-                    });
+                    }
                     
                     if (updated) {
                         await updateDoc(doc(firestore, 'orders', d.id), { items });
@@ -570,18 +591,30 @@ export const db = {
                 
                 orders.forEach(o => {
                     if (o.sessionId === sessionId) {
-                        o.items = o.items.map(item => {
-                            if (item.productId === productId && !quantityUpdated) {
-                                item.quantity = newQty;
-                                quantityUpdated = true;
+                        const items = [];
+                        let updated = false;
+                        for (const item of o.items) {
+                            if (item.productId === productId) {
+                                if (!quantityUpdated) {
+                                    item.quantity = newQty;
+                                    items.push(item);
+                                    updated = true;
+                                    quantityUpdated = true;
+                                } else {
+                                    updated = true;
+                                }
+                            } else {
+                                items.push(item);
                             }
-                            return item;
-                        });
+                        }
+                        o.items = items;
+                        
                         if (o.status !== 'cancelled') {
                             newTotalAmount += o.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
                         }
                     }
                 });
+
                 
                 localStorage.setItem('cs_orders', JSON.stringify(orders));
                 mockDB.trigger('orders', orders);
@@ -634,36 +667,61 @@ export const db = {
                 callback(JSON.parse(localStorage.getItem('cs_requests') || '[]'));
             }
         },
-        async add(tableNumber, type, locationLabel = "") {
+        listenOne(id, callback) {
+            if (firebaseInitialized) {
+                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ doc, onSnapshot }) => {
+                    onSnapshot(doc(firestore, 'requests', id), (docSnap) => {
+                        if (docSnap.exists()) {
+                            callback({ id: docSnap.id, ...docSnap.data() });
+                        }
+                    });
+                });
+            } else {
+                // Mock listener for one is harder, just poll or pass for mock
+                const interval = setInterval(() => {
+                    const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
+                    const req = requests.find(r => r.id === id);
+                    if (req) callback(req);
+                }, 1000);
+                return () => clearInterval(interval);
+            }
+        },
+        async add(tableNumber, type, locationLabel = "", meta = {}) {
             tableNumber = parseInt(tableNumber);
             const request = {
                 tableNumber,
-                type, // 'waiter', 'bill_digital', 'bill_printed'
+                type, // 'waiter', 'bill_digital', 'bill_printed', 'join_session'
                 status: 'pending',
                 locationLabel: locationLabel || "Table " + tableNumber,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                ...meta
             };
 
             if (firebaseInitialized) {
                 const { collection, addDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                await addDoc(collection(firestore, 'requests'), request);
+                const docRef = await addDoc(collection(firestore, 'requests'), request);
+                return docRef.id;
             } else {
                 const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
                 request.id = 'req_' + Date.now();
                 requests.push(request);
                 localStorage.setItem('cs_requests', JSON.stringify(requests));
                 mockDB.trigger('requests', requests);
+                return request.id;
             }
         },
         async complete(id) {
+            return this.updateStatus(id, 'completed');
+        },
+        async updateStatus(id, newStatus) {
             if (firebaseInitialized) {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                await updateDoc(doc(firestore, 'requests', id), { status: 'completed' });
+                await updateDoc(doc(firestore, 'requests', id), { status: newStatus });
             } else {
                 const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
                 const idx = requests.findIndex(r => r.id === id);
                 if (idx !== -1) {
-                    requests[idx].status = 'completed';
+                    requests[idx].status = newStatus;
                     localStorage.setItem('cs_requests', JSON.stringify(requests));
                     mockDB.trigger('requests', requests);
                 }

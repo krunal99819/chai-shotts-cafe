@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=15';
+import db, { cleanPhoneNumber } from './db.js?v=20';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -475,7 +475,7 @@ function handleRequestsUpdate(requests) {
     if (pending.length > unresolvedRequestCount) {
         const newest = pending[0]; // first item in sorted list
         if (newest) {
-            if (newest.type === 'waiter' || newest.type.startsWith('duplicate_session')) {
+            if (newest.type === 'waiter' || newest.type.startsWith('duplicate_session') || newest.type === 'join_session') {
                 soundEffects.playWaiter(); // bell chime
             } else if (newest.type.includes('bill')) {
                 soundEffects.playBill(); // cash register chime
@@ -503,9 +503,12 @@ function updateDashboardMetrics() {
     const activeOrders = allOrders.filter(o => o.status !== 'served' && o.status !== 'cancelled');
     elements.mTotalOrders.innerText = activeOrders.length;
 
-    // 3. Count Running Tables
-    const runningTables = allSessions.filter(s => s.status === 'open' && s.tableNumber <= 9);
-    elements.mActiveTables.innerText = `${runningTables.length} / 9`;
+    // 3. Count Running Tables (Unique)
+    const runningTableSet = new Set(
+        allSessions.filter(s => s.status === 'open' && s.tableNumber <= 9)
+                   .map(s => s.tableNumber)
+    );
+    elements.mActiveTables.innerText = `${runningTableSet.size} / 9`;
 
     // 4. Pending Requests
     const pendingReqs = allRequests.filter(r => r.status === 'pending' && !r.type.startsWith('feedback:'));
@@ -1060,12 +1063,14 @@ function renderRequestsQueue() {
         if (req.type === 'bill_digital') typeBadge = `<span class="badge badge-info"><i class="fa-solid fa-file-pdf"></i> Digital PDF Bill</span>`;
         if (req.type.startsWith('feedback:')) typeBadge = `<span class="badge badge-success"><i class="fa-solid fa-heart"></i> Feedback Sent</span>`;
         if (req.type.startsWith('duplicate_session:')) typeBadge = `<span class="badge badge-danger" style="background:#dc3545; color:white; border-color:#dc3545;"><i class="fa-solid fa-triangle-exclamation"></i> Session Warning</span>`;
+        if (req.type === 'join_session') typeBadge = `<span class="badge badge-warning" style="background:#f39c12; color:white;"><i class="fa-solid fa-users"></i> Table Join Request</span>`;
 
         let detailsText = "Requested waiter service.";
         if (req.type === 'bill_printed') detailsText = "Wants paper bill delivered to table.";
         if (req.type === 'bill_digital') detailsText = "Downloaded digital PDF. Needs UPI verification / cashier approval.";
         if (req.type.startsWith('feedback:')) detailsText = req.type.replace('feedback:', '');
         if (req.type.startsWith('duplicate_session:')) detailsText = req.type.replace('duplicate_session:', '');
+        if (req.type === 'join_session') detailsText = `${req.joinName} (${req.joinPhone}) wants to join this occupied table.`;
 
         const locationText = req.locationLabel || `Table ${req.tableNumber}`;
         html += `
@@ -1080,9 +1085,20 @@ function renderRequestsQueue() {
                     </div>
                     <p style="font-size:0.85rem; color:var(--color-text-dark); margin-bottom:16px;">${detailsText}</p>
                 </div>
-                <button class="btn-primary btn-resolve-request" data-req-id="${req.id}" style="width:100%; padding: 8px; font-size: 0.8rem;">
-                    <i class="fa-solid fa-check"></i> Dismiss / Resolve
-                </button>
+                ${req.type === 'join_session' ? `
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-primary btn-approve-request" data-req-id="${req.id}" style="width:50%; padding: 8px; font-size: 0.8rem; background-color: var(--color-success); border-color: var(--color-success);">
+                            <i class="fa-solid fa-check"></i> Approve
+                        </button>
+                        <button class="btn-primary btn-reject-request" data-req-id="${req.id}" style="width:50%; padding: 8px; font-size: 0.8rem; background-color: var(--color-danger); border-color: var(--color-danger);">
+                            <i class="fa-solid fa-xmark"></i> Reject
+                        </button>
+                    </div>
+                ` : `
+                    <button class="btn-primary btn-resolve-request" data-req-id="${req.id}" style="width:100%; padding: 8px; font-size: 0.8rem;">
+                        <i class="fa-solid fa-check"></i> Dismiss / Resolve
+                    </button>
+                `}
             </div>
         `;
     });
@@ -1095,6 +1111,24 @@ function renderRequestsQueue() {
             const reqId = e.currentTarget.dataset.reqId;
             e.currentTarget.disabled = true;
             await db.requests.complete(reqId);
+        });
+    });
+    
+    // Bind approve button
+    elements.adminRequestsContainer.querySelectorAll('.btn-approve-request').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const reqId = e.currentTarget.dataset.reqId;
+            e.currentTarget.disabled = true;
+            await db.requests.updateStatus(reqId, 'completed');
+        });
+    });
+    
+    // Bind reject button
+    elements.adminRequestsContainer.querySelectorAll('.btn-reject-request').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const reqId = e.currentTarget.dataset.reqId;
+            e.currentTarget.disabled = true;
+            await db.requests.updateStatus(reqId, 'rejected');
         });
     });
 }
@@ -1678,6 +1712,24 @@ function bindBillManagerEvents() {
         });
     }
 
+    // 4.1 Mark Session Paid
+    const btnMarkPaid = document.getElementById('btnMarkSessionPaid');
+    if (btnMarkPaid) {
+        btnMarkPaid.addEventListener('click', async () => {
+            if (!activeBillingSessionId) return;
+            if (confirm("Are you sure you want to close this session and mark it as Paid? This will release the table/room.")) {
+                try {
+                    await db.sessions.close(activeBillingSessionId, 'Cash'); // Use a generic payment method or prompt for it
+                    alert("Session marked as paid successfully.");
+                    closeBillModal();
+                } catch (e) {
+                    console.error(e);
+                    alert("Failed to mark session as paid.");
+                }
+            }
+        });
+    }
+
     // 5. Print Receipt from modal
     if (btnPrintReceipt) {
         btnPrintReceipt.addEventListener('click', () => {
@@ -2060,11 +2112,13 @@ async function openBillModal(sessionId) {
     }
     
     // Configure inputs visibility based on status
+    const btnMarkPaid = document.getElementById('btnMarkSessionPaid');
     if (session.status === 'open') {
         editCustName.disabled = false;
         editCustPhone.disabled = false;
         if (customerEditSection) customerEditSection.style.display = "block";
         if (addItemSection) addItemSection.style.display = "block";
+        if (btnMarkPaid) btnMarkPaid.style.display = "flex";
         
         // Load product select list options
         if (addProductSelect) {
@@ -2082,6 +2136,7 @@ async function openBillModal(sessionId) {
         editCustPhone.disabled = true;
         if (customerEditSection) customerEditSection.style.display = "none";
         if (addItemSection) addItemSection.style.display = "none";
+        if (btnMarkPaid) btnMarkPaid.style.display = "none";
     }
 
     // Display loyalty program status label

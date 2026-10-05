@@ -721,6 +721,9 @@
                         <div id="billModalGrandTotal" style="font-family:var(--font-heading); font-weight:800; font-size:1.35rem; color:var(--color-primary-deep);">₹0</div>
                     </div>
                     <div style="display:flex; gap:10px;">
+                        <button type="button" id="btnMarkSessionPaid" class="btn-primary" style="padding:8px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px; background-color:var(--color-success); border-color:var(--color-success); color:white; display:none;">
+                            <i class="fa-solid fa-check-double"></i> Mark Paid
+                        </button>
                         <button type="button" id="btnPrintReceiptFromModal" class="btn-primary" style="padding:8px 16px; font-size:0.85rem; display:flex; align-items:center; gap:6px; background-color:var(--color-accent-gold); border-color:var(--color-accent-gold); color:var(--color-primary-deep);">
                             <i class="fa-solid fa-print"></i> Print Receipt
                         </button>
@@ -737,6 +740,6 @@
     <div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <!-- Application Script -->
-    <script type="module" src="js/admin.js?v=15"></script>
+    <script type="module" src="js/admin.js?v=20"></script>
 </body>
 </html>
