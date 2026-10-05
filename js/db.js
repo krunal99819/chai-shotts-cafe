@@ -668,16 +668,18 @@ export const db = {
             }
         },
         listenOne(id, callback) {
+            let unsubscribe = null;
             if (firebaseInitialized) {
                 import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ doc, onSnapshot }) => {
-                    onSnapshot(doc(firestore, 'requests', id), (docSnap) => {
+                    unsubscribe = onSnapshot(doc(firestore, 'requests', id), (docSnap) => {
                         if (docSnap.exists()) {
                             callback({ id: docSnap.id, ...docSnap.data() });
                         }
                     });
                 });
+                return () => { if (unsubscribe) unsubscribe(); };
             } else {
-                // Mock listener for one is harder, just poll or pass for mock
+                // Mock listener for one
                 const interval = setInterval(() => {
                     const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
                     const req = requests.find(r => r.id === id);

@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=20';
+import db, { cleanPhoneNumber } from './db.js?v=21';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -406,10 +406,10 @@ async function handleCreateSession() {
                 await new Promise((resolve, reject) => {
                     const unsub = db.requests.listenOne(reqId, (reqData) => {
                         if (reqData.status === 'completed') { // Admin approved
-                            unsub();
+                            if (typeof unsub === 'function') unsub();
                             resolve(true);
                         } else if (reqData.status === 'rejected') { // Admin rejected
-                            unsub();
+                            if (typeof unsub === 'function') unsub();
                             resolve(false);
                         }
                     });

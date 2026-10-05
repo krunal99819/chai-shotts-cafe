@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=20';
+import db, { cleanPhoneNumber } from './db.js?v=21';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -1087,10 +1087,10 @@ function renderRequestsQueue() {
                 </div>
                 ${req.type === 'join_session' ? `
                     <div style="display:flex; gap:8px;">
-                        <button class="btn-primary btn-approve-request" data-req-id="${req.id}" style="width:50%; padding: 8px; font-size: 0.8rem; background-color: var(--color-success); border-color: var(--color-success);">
+                        <button class="btn-primary btn-approve-request" data-req-id="${req.id}" style="width:50%; padding: 8px; font-size: 0.8rem; background-color: #28a745; border-color: #28a745; color: white;">
                             <i class="fa-solid fa-check"></i> Approve
                         </button>
-                        <button class="btn-primary btn-reject-request" data-req-id="${req.id}" style="width:50%; padding: 8px; font-size: 0.8rem; background-color: var(--color-danger); border-color: var(--color-danger);">
+                        <button class="btn-primary btn-reject-request" data-req-id="${req.id}" style="width:50%; padding: 8px; font-size: 0.8rem; background-color: #dc3545; border-color: #dc3545; color: white;">
                             <i class="fa-solid fa-xmark"></i> Reject
                         </button>
                     </div>
