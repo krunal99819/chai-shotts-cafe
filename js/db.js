@@ -68,7 +68,7 @@ const mockDB = {
         // Initialize Default Users
         if (!localStorage.getItem('cs_users')) {
             localStorage.setItem('cs_users', JSON.stringify([
-                { email: 'admin@chaishotts.com', role: 'admin', name: 'Admin Staff', password: 'admin' }
+                { email: 'admin@chaishotts.com', role: 'admin', name: 'Admin Staff', password: 'admin123' }
             ]));
         }
         if (!localStorage.getItem('cs_settings')) {
