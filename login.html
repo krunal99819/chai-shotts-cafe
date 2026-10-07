@@ -132,12 +132,6 @@
             </button>
         </form>
 
-        <!-- Easy Quick Login shortcuts for testing/simulation -->
-        <div class="shortcut-grid" style="grid-template-columns: 1fr;">
-            <button class="shortcut-btn" data-email="admin@chaishotts.com" data-pass="admin123" style="padding: 12px;">
-                <i class="fa-solid fa-user-shield"></i> Quick Login as Admin
-            </button>
-        </div>
     </div>
 
     <script type="module">
@@ -165,16 +159,6 @@
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Authenticate';
             }
-        });
-
-        // Quick login buttons
-        document.querySelectorAll('.shortcut-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const target = e.currentTarget;
-                emailInput.value = target.dataset.email;
-                passwordInput.value = target.dataset.pass;
-                form.dispatchEvent(new Event('submit'));
-            });
         });
 
         function handleRedirect(role) {
