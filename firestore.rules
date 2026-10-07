@@ -56,7 +56,7 @@ service cloud.firestore {
     // User accounts (Staff metadata)
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == userId; // Allow staff setup
+      allow write: if isAuthenticated() && request.auth.uid == userId && request.auth.token.email == 'admin@chaishotts.com'; 
     }
 
     // Global Cafe Settings (GST & Timings)
