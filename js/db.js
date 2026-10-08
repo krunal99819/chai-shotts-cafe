@@ -238,17 +238,31 @@ export const db = {
     orders: {
         listen(callback) {
             if (firebaseInitialized) {
+                let unsubscribe = null;
                 import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy }) => {
                     const q = query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'));
-                    onSnapshot(q, (snapshot) => {
+                    unsubscribe = onSnapshot(q, (snapshot) => {
                         const orders = [];
                         snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
                         callback(orders);
                     });
                 });
+                return () => { if (unsubscribe) unsubscribe(); };
             } else {
                 mockDB.listeners.orders.push(callback);
                 callback(JSON.parse(localStorage.getItem('cs_orders') || '[]'));
+                return () => {};
+            }
+        },
+        async getAll() {
+            if (firebaseInitialized) {
+                const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const snapshot = await getDocs(collection(firestore, 'orders'));
+                const orders = [];
+                snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
+                return orders.sort((a,b) => b.createdAt - a.createdAt);
+            } else {
+                return JSON.parse(localStorage.getItem('cs_orders') || '[]');
             }
         },
         async add(order) {
@@ -344,17 +358,20 @@ export const db = {
     sessions: {
         listen(callback) {
             if (firebaseInitialized) {
+                let unsubscribe = null;
                 import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy }) => {
                     const q = query(collection(firestore, 'sessions'), orderBy('createdAt', 'desc'));
-                    onSnapshot(q, (snapshot) => {
+                    unsubscribe = onSnapshot(q, (snapshot) => {
                         const sessions = [];
                         snapshot.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
                         callback(sessions);
                     });
                 });
+                return () => { if (unsubscribe) unsubscribe(); };
             } else {
                 mockDB.listeners.sessions.push(callback);
                 callback(JSON.parse(localStorage.getItem('cs_sessions') || '[]'));
+                return () => {};
             }
         },
         getSession: async function(id) {

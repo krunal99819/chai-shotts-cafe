@@ -503,27 +503,12 @@ function listenToSessionChanges(sessionId) {
     if (activeSessionListener) activeSessionListener(); // Clear old listener
 
     // Listen to changes in this session (e.g. if Cashier marks table as Paid)
-    if (db.isFirebase) {
-        // Firestore real-time listener
-        import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ doc, onSnapshot }) => {
-            const { getFirestore } = doc; // Reference helper
-            // We use global db to listen
-            db.sessions.listen((sessions) => {
-                const updated = sessions.find(s => s.id === sessionId);
-                if (updated) {
-                    handleSessionUpdate(updated);
-                }
-            });
-        });
-    } else {
-        // Fallback polling or mock trigger
-        db.sessions.listen((sessions) => {
-            const updated = sessions.find(s => s.id === sessionId);
-            if (updated) {
-                handleSessionUpdate(updated);
-            }
-        });
-    }
+    activeSessionListener = db.sessions.listen((sessions) => {
+        const updated = sessions.find(s => s.id === sessionId);
+        if (updated) {
+            handleSessionUpdate(updated);
+        }
+    });
 }
 
 function handleSessionUpdate(session) {
@@ -1206,12 +1191,8 @@ async function syncRunningBill() {
         return;
     }
     
-    const orders = await new Promise((resolve) => {
-        db.orders.listen(allOrders => {
-            const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
-            resolve(sessionOrders);
-        });
-    });
+    const allOrders = await db.orders.getAll();
+    const orders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
 
     if (orders.length === 0) {
         elements.runningBillSection.style.display = 'none';
@@ -1486,7 +1467,7 @@ function listenToOrderStatus(orderId) {
     if (activeOrdersListener) activeOrdersListener(); // Unsubscribe old
 
     // Live Firestore tracking
-    db.orders.listen(orders => {
+    activeOrdersListener = db.orders.listen(orders => {
         const order = orders.find(o => o.id === orderId);
         if (order) {
             setupOrderTracker(order);
@@ -1560,12 +1541,8 @@ async function openBillSummaryModal() {
         dateSpan.innerText = new Date(activeSession?.createdAt || Date.now()).toLocaleDateString();
 
         // Fetch all orders placed in this session
-        const orders = await new Promise((resolve) => {
-            db.orders.listen(allOrders => {
-                const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
-                resolve(sessionOrders);
-            });
-        });
+        const allOrders = await db.orders.getAll();
+        const orders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
 
         if (orders.length === 0) {
             alert("No orders placed yet!");
@@ -1635,11 +1612,10 @@ async function handleDigitalBillRequest() {
         await db.requests.add(tableNumber, 'bill_digital', loc);
         
         // Fetch all orders placed in this session
-        db.orders.listen(async (allOrders) => {
-            const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
-            if (sessionOrders.length === 0) return;
-            generateInvoicePDF(activeSession, sessionOrders);
-        });
+        const allOrders = await db.orders.getAll();
+        const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
+        if (sessionOrders.length === 0) return;
+        generateInvoicePDF(activeSession, sessionOrders);
     } catch (e) {
         console.error(e);
         alert("Failed to request digital bill.");
