@@ -719,8 +719,13 @@ function loadCheckoutDrawer(session) {
         });
     });
 
-    // Billing Totals (GST conditionally configured)
-    const subtotal = session.totalAmount;
+    // Billing Totals (Calculated dynamically to ensure 100% accuracy)
+    let dynamicSubtotal = 0;
+    Object.keys(consolidatedItems).forEach(pId => {
+        dynamicSubtotal += (consolidatedItems[pId].price * consolidatedItems[pId].qty);
+    });
+    
+    const subtotal = dynamicSubtotal;
     let discount = 0;
     if (session.loyaltyDiscountPercent > 0) {
         discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));

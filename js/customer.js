@@ -1169,11 +1169,24 @@ function renderCartDrawerList() {
 
     elements.drawerTax.innerText = `₹${tax}`;
     
-    // Display running bill details if session exists
-    if (activeSession && activeSession.totalAmount > 0) {
-        elements.runningBillMergeRow.style.display = 'flex';
-        elements.runningSessionAmount.innerText = `₹${activeSession.totalAmount}`;
-        grandTotal += activeSession.totalAmount;
+    // Display running bill details if session exists dynamically
+    if (activeSession) {
+        const allOrders = await db.orders.getAll();
+        const orders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
+        let sessionDynamicTotal = 0;
+        orders.forEach(o => {
+            o.items.forEach(item => {
+                sessionDynamicTotal += (item.price * item.quantity);
+            });
+        });
+        
+        if (sessionDynamicTotal > 0) {
+            elements.runningBillMergeRow.style.display = 'flex';
+            elements.runningSessionAmount.innerText = `₹${sessionDynamicTotal}`;
+            grandTotal += sessionDynamicTotal;
+        } else {
+            elements.runningBillMergeRow.style.display = 'none';
+        }
     } else {
         elements.runningBillMergeRow.style.display = 'none';
     }
