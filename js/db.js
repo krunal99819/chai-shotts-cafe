@@ -374,6 +374,17 @@ export const db = {
                 return () => {};
             }
         },
+        async getAll() {
+            if (firebaseInitialized) {
+                const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const snapshot = await getDocs(collection(firestore, 'sessions'));
+                const sessions = [];
+                snapshot.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
+                return sessions.sort((a,b) => b.createdAt - a.createdAt);
+            } else {
+                return JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+            }
+        },
         getSession: async function(id) {
             if (firebaseInitialized) {
                 const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
