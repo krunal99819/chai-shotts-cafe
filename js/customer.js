@@ -201,12 +201,16 @@ async function initApp() {
         }
     }
     
-    // 3. Load Menu Data (Categories & Products)
-    db.categories.listen(loadCategories);
-    db.products.listen(loadProducts);
-    
-    // Load global settings (GST, Timings, Overrides)
-    db.settings.listen(settings => {
+    // 3. Load Menu Data (Categories & Products) - FETCH ONCE TO SAVE FIREBASE READS
+    try {
+        const categories = await db.categories.getAll();
+        loadCategories(categories);
+        
+        const products = await db.products.getAll();
+        loadProducts(products);
+        
+        // Load global settings (GST, Timings, Overrides)
+        const settings = await db.settings.getAll();
         globalSettings = settings || {};
         gstEnabled = globalSettings.gstEnabled || false;
         // Dynamically update UI calculations
@@ -217,7 +221,9 @@ async function initApp() {
         if (activeSession) {
             syncRunningBill();
         }
-    });
+    } catch (err) {
+        console.error("Failed to load catalog/settings", err);
+    }
 
     // 4. Setup Event Listeners
     setupEventListeners();

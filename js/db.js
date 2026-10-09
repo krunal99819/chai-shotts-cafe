@@ -142,6 +142,18 @@ export const db = {
                 callback(JSON.parse(localStorage.getItem('cs_categories') || '[]'));
             }
         },
+        async getAll() {
+            if (firebaseInitialized) {
+                const { collection, getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const q = query(collection(firestore, 'categories'), orderBy('sortOrder', 'asc'));
+                const snapshot = await getDocs(q);
+                const categories = [];
+                snapshot.forEach(doc => categories.push({ id: doc.id, ...doc.data() }));
+                return categories;
+            } else {
+                return JSON.parse(localStorage.getItem('cs_categories') || '[]');
+            }
+        },
         async add(category) {
             if (firebaseInitialized) {
                 const { collection, addDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
@@ -194,6 +206,17 @@ export const db = {
             } else {
                 mockDB.listeners.products.push(callback);
                 callback(JSON.parse(localStorage.getItem('cs_products') || '[]'));
+            }
+        },
+        async getAll() {
+            if (firebaseInitialized) {
+                const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const snapshot = await getDocs(collection(firestore, 'products'));
+                const products = [];
+                snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
+                return products;
+            } else {
+                return JSON.parse(localStorage.getItem('cs_products') || '[]');
             }
         },
         async add(product) {
@@ -534,7 +557,12 @@ export const db = {
                     const orderData = d.data();
                     const updatedItems = orderData.items.filter(item => item.productId !== productId);
                     if (updatedItems.length !== orderData.items.length) {
-                        await updateDoc(doc(firestore, 'orders', d.id), { items: updatedItems });
+                        if (updatedItems.length === 0) {
+                            const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                            await deleteDoc(doc(firestore, 'orders', d.id));
+                        } else {
+                            await updateDoc(doc(firestore, 'orders', d.id), { items: updatedItems });
+                        }
                     }
                     if (orderData.status !== 'cancelled') {
                         newTotalAmount += updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -604,7 +632,12 @@ export const db = {
                     }
                     
                     if (updated) {
-                        await updateDoc(doc(firestore, 'orders', d.id), { items });
+                        if (items.length === 0) {
+                            const { deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                            await deleteDoc(doc(firestore, 'orders', d.id));
+                        } else {
+                            await updateDoc(doc(firestore, 'orders', d.id), { items });
+                        }
                     }
                     if (orderData.status !== 'cancelled') {
                         newTotalAmount += items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -877,6 +910,19 @@ export const db = {
                 mockDB.listeners.settings.push(callback);
                 const settings = JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
                 callback(settings);
+            }
+        },
+        async getAll() {
+            if (firebaseInitialized) {
+                const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const docSnap = await getDoc(doc(firestore, 'settings', 'global'));
+                if (docSnap.exists()) {
+                    return docSnap.data();
+                } else {
+                    return { gstEnabled: false };
+                }
+            } else {
+                return JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
             }
         },
         async setGst(enabled) {
