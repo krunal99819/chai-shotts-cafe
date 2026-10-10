@@ -165,6 +165,7 @@ export const db = {
                 localStorage.setItem('cs_categories', JSON.stringify(categories));
                 mockDB.trigger('categories', categories);
             }
+            await db.settings.bumpCatalogVersion();
         },
         async update(id, data) {
             if (firebaseInitialized) {
@@ -179,6 +180,7 @@ export const db = {
                     mockDB.trigger('categories', categories);
                 }
             }
+            await db.settings.bumpCatalogVersion();
         },
         async delete(id) {
             if (firebaseInitialized) {
@@ -190,6 +192,7 @@ export const db = {
                 localStorage.setItem('cs_categories', JSON.stringify(filtered));
                 mockDB.trigger('categories', filtered);
             }
+            await db.settings.bumpCatalogVersion();
         }
     },
 
@@ -230,6 +233,7 @@ export const db = {
                 localStorage.setItem('cs_products', JSON.stringify(products));
                 mockDB.trigger('products', products);
             }
+            await db.settings.bumpCatalogVersion();
         },
         async update(id, data) {
             if (firebaseInitialized) {
@@ -244,6 +248,7 @@ export const db = {
                     mockDB.trigger('products', products);
                 }
             }
+            await db.settings.bumpCatalogVersion();
         },
         async delete(id) {
             if (firebaseInitialized) {
@@ -255,6 +260,7 @@ export const db = {
                 localStorage.setItem('cs_products', JSON.stringify(filtered));
                 mockDB.trigger('products', filtered);
             }
+            await db.settings.bumpCatalogVersion();
         }
     },
 
@@ -967,6 +973,17 @@ export const db = {
                 const updated = { ...current, ...data };
                 localStorage.setItem('cs_settings', JSON.stringify(updated));
                 mockDB.trigger('settings', updated);
+            }
+        },
+        async bumpCatalogVersion() {
+            if (firebaseInitialized) {
+                const { doc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                await setDoc(doc(firestore, 'settings', 'global'), { catalogVersion: increment(1) }, { merge: true });
+            } else {
+                const current = JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
+                current.catalogVersion = (current.catalogVersion || 0) + 1;
+                localStorage.setItem('cs_settings', JSON.stringify(current));
+                mockDB.trigger('settings', current);
             }
         }
     }

@@ -201,18 +201,36 @@ async function initApp() {
         }
     }
     
-    // 3. Load Menu Data (Categories & Products) - FETCH ONCE TO SAVE FIREBASE READS
+    // 3. Load Menu Data (Categories & Products) - EXTREME CACHING TO 1 READ
     try {
-        const categories = await db.categories.getAll();
-        loadCategories(categories);
-        
-        const products = await db.products.getAll();
-        loadProducts(products);
-        
-        // Load global settings (GST, Timings, Overrides)
+        // Fetch only settings to check version (1 read total)
         const settings = await db.settings.getAll();
         globalSettings = settings || {};
         gstEnabled = globalSettings.gstEnabled || false;
+        
+        const remoteVersion = settings.catalogVersion || 1;
+        const localVersion = parseInt(localStorage.getItem('cs_catalog_version') || '0');
+        const cachedCategories = localStorage.getItem('cs_cached_categories');
+        const cachedProducts = localStorage.getItem('cs_cached_products');
+        
+        if (remoteVersion === localVersion && cachedCategories && cachedProducts) {
+            // CACHE HIT: 0 additional reads!
+            loadCategories(JSON.parse(cachedCategories));
+            loadProducts(JSON.parse(cachedProducts));
+        } else {
+            // CACHE MISS or VERSION UPDATED: Fetch from DB (~45 reads)
+            const categories = await db.categories.getAll();
+            const products = await db.products.getAll();
+            
+            // Save to LocalStorage for next time
+            localStorage.setItem('cs_cached_categories', JSON.stringify(categories));
+            localStorage.setItem('cs_cached_products', JSON.stringify(products));
+            localStorage.setItem('cs_catalog_version', remoteVersion.toString());
+            
+            loadCategories(categories);
+            loadProducts(products);
+        }
+        
         // Dynamically update UI calculations
         updateCartUI();
         if (elements.cartDrawer.classList.contains('open')) {
