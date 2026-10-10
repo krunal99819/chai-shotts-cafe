@@ -1101,7 +1101,7 @@ function closeCartDrawer() {
     }, 300);
 }
 
-function renderCartDrawerList() {
+async function renderCartDrawerList() {
     const cartKeys = Object.keys(cart);
     let html = "";
     let subtotal = 0;
