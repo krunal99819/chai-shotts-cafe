@@ -269,7 +269,7 @@ export const db = {
             if (firebaseInitialized) {
                 let unsubscribe = null;
                 import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
-                    const q = query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(1000));
+                    const q = query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(250));
                     unsubscribe = onSnapshot(q, (snapshot) => {
                         const orders = [];
                         snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
@@ -307,6 +307,19 @@ export const db = {
                 return orders.sort((a,b) => b.createdAt - a.createdAt);
             } else {
                 return JSON.parse(localStorage.getItem('cs_orders') || '[]');
+            }
+        },
+        async getBySession(sessionId) {
+            if (firebaseInitialized) {
+                const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const q = query(collection(firestore, 'orders'), where('sessionId', '==', sessionId));
+                const snapshot = await getDocs(q);
+                const orders = [];
+                snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
+                return orders.sort((a,b) => b.createdAt - a.createdAt);
+            } else {
+                const all = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                return all.filter(o => o.sessionId === sessionId).sort((a,b) => b.createdAt - a.createdAt);
             }
         },
         async add(order) {
@@ -404,7 +417,7 @@ export const db = {
             if (firebaseInitialized) {
                 let unsubscribe = null;
                 import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
-                    const q = query(collection(firestore, 'sessions'), orderBy('createdAt', 'desc'), limit(1000));
+                    const q = query(collection(firestore, 'sessions'), orderBy('createdAt', 'desc'), limit(250));
                     unsubscribe = onSnapshot(q, (snapshot) => {
                         const sessions = [];
                         snapshot.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
@@ -751,17 +764,20 @@ export const db = {
     requests: {
         listen(callback) {
             if (firebaseInitialized) {
-                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy }) => {
-                    const q = query(collection(firestore, 'requests'), orderBy('createdAt', 'desc'));
-                    onSnapshot(q, (snapshot) => {
+                let unsubscribe = null;
+                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
+                    const q = query(collection(firestore, 'requests'), orderBy('createdAt', 'desc'), limit(100));
+                    unsubscribe = onSnapshot(q, (snapshot) => {
                         const requests = [];
                         snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
                         callback(requests);
                     });
                 });
+                return () => { if (unsubscribe) unsubscribe(); };
             } else {
                 mockDB.listeners.requests.push(callback);
                 callback(JSON.parse(localStorage.getItem('cs_requests') || '[]'));
+                return () => {};
             }
         },
         listenOne(id, callback) {

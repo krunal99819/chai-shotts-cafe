@@ -1192,8 +1192,8 @@ async function renderCartDrawerList() {
     
     // Display running bill details if session exists dynamically
     if (activeSession) {
-        const allOrders = await db.orders.getAll();
-        const orders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
+        const sessionOrders = await db.orders.getBySession(activeSession.id);
+        const orders = sessionOrders.filter(o => o.status !== 'cancelled');
         let sessionDynamicTotal = 0;
         orders.forEach(o => {
             o.items.forEach(item => {
@@ -1225,8 +1225,8 @@ async function syncRunningBill() {
         return;
     }
     
-    const allOrders = await db.orders.getAll();
-    const orders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
+    const sessionOrders = await db.orders.getBySession(activeSession.id);
+    const orders = sessionOrders.filter(o => o.status !== 'cancelled');
 
     if (orders.length === 0) {
         elements.runningBillSection.style.display = 'none';
@@ -1572,8 +1572,8 @@ async function openBillSummaryModal() {
         dateSpan.innerText = new Date(activeSession?.createdAt || Date.now()).toLocaleDateString();
 
         // Fetch all orders placed in this session
-        const allOrders = await db.orders.getAll();
-        const orders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
+        const sessionOrders = await db.orders.getBySession(activeSession.id);
+        const orders = sessionOrders.filter(o => o.status !== 'cancelled');
 
         if (orders.length === 0) {
             alert("No orders placed yet!");
@@ -1643,10 +1643,10 @@ async function handleDigitalBillRequest() {
         await db.requests.add(tableNumber, 'bill_digital', loc);
         
         // Fetch all orders placed in this session
-        const allOrders = await db.orders.getAll();
-        const sessionOrders = allOrders.filter(o => o.sessionId === activeSession.id && o.status !== 'cancelled');
-        if (sessionOrders.length === 0) return;
-        generateInvoicePDF(activeSession, sessionOrders);
+        const sessionOrders = await db.orders.getBySession(activeSession.id);
+        const validSessionOrders = sessionOrders.filter(o => o.status !== 'cancelled');
+        if (validSessionOrders.length === 0) return;
+        generateInvoicePDF(activeSession, validSessionOrders);
     } catch (e) {
         console.error(e);
         alert("Failed to request digital bill.");

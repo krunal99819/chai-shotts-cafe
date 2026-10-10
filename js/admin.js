@@ -706,8 +706,7 @@ function loadCheckoutDrawer(session) {
                 try {
                     await db.sessions.deleteItem(session.id, pId);
                     // Fetch updated session details and reload checkout drawer
-                    const sessions = await db.sessions.getAll();
-                    const updatedSess = sessions.find(s => s.id === session.id);
+                    const updatedSess = await db.sessions.getSession(session.id);
                     if (updatedSess) {
                         loadCheckoutDrawer(updatedSess);
                     }
@@ -1640,8 +1639,7 @@ function bindBillManagerEvents() {
                 alert("Customer details updated successfully!");
                 
                 // Reload running details
-                const sessions = await db.sessions.getAll();
-                const updated = sessions.find(s => s.id === activeBillingSessionId);
+                const updated = await db.sessions.getSession(activeBillingSessionId);
                 if (updated) openBillModal(updated.id);
             } catch (e) {
                 console.error(e);
@@ -1678,8 +1676,7 @@ function bindBillManagerEvents() {
             }
     
             const product = allProducts.find(p => p.id === pId);
-            const sessions = await db.sessions.getAll();
-            const session = sessions.find(s => s.id === activeBillingSessionId);
+            const session = await db.sessions.getSession(activeBillingSessionId);
             
             if (!product || !session) return;
     
