@@ -508,12 +508,9 @@ async function handleCreateSession() {
 function listenToSessionChanges(sessionId) {
     if (activeSessionListener) activeSessionListener(); // Clear old listener
 
-    // Listen to changes in this session (e.g. if Cashier marks table as Paid)
-    activeSessionListener = db.sessions.listen((sessions) => {
-        const updated = sessions.find(s => s.id === sessionId);
-        if (updated) {
-            handleSessionUpdate(updated);
-        }
+    // Listen to changes ONLY in this specific session to save reads
+    activeSessionListener = db.sessions.listenDoc(sessionId, (updatedSession) => {
+        handleSessionUpdate(updatedSession);
     });
 }
 
@@ -1485,12 +1482,9 @@ async function handlePlaceOrder() {
 function listenToOrderStatus(orderId) {
     if (activeOrdersListener) activeOrdersListener(); // Unsubscribe old
 
-    // Live Firestore tracking
-    activeOrdersListener = db.orders.listen(orders => {
-        const order = orders.find(o => o.id === orderId);
-        if (order) {
-            setupOrderTracker(order);
-        }
+    // Live Firestore tracking for ONLY this specific order to save reads
+    activeOrdersListener = db.orders.listenDoc(orderId, (order) => {
+        setupOrderTracker(order);
     });
 }
 
