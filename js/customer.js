@@ -433,8 +433,7 @@ async function handleCreateSession() {
         tableNumber = localTableNum;
         elements.tableIndicator.innerHTML = `<i class="fa-solid fa-location-dot"></i> ${locationLabel}`;
 
-        const sessions = await db.sessions.getAllOpen();
-        const activeLocationSess = sessions.find(s => s.tableNumber === localTableNum && (localTableNum < 10 ? true : s.locationLabel.toLowerCase() === locationLabel.toLowerCase()));
+        const activeLocationSess = await db.sessions.getActive(localTableNum, locationLabel);
         
         if (activeLocationSess) {
             if (activeLocationSess.customerName.toLowerCase() === name.toLowerCase()) {

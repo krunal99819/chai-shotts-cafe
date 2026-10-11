@@ -482,14 +482,25 @@ export const db = {
                 return sessions.filter(s => s.status === 'open').sort((a, b) => b.createdAt - a.createdAt);
             }
         },
-        async getActive(tableNumber) {
+        async getActive(tableNumber, locationLabel = "") {
             tableNumber = parseInt(tableNumber);
             if (firebaseInitialized) {
-                const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                const q = query(collection(firestore, 'sessions'), 
-                    where('tableNumber', '==', tableNumber), 
-                    where('status', '==', 'open')
-                );
+                const { collection, getDocs, query, where, limit } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                let q;
+                if (tableNumber >= 10 && locationLabel) {
+                    q = query(collection(firestore, 'sessions'), 
+                        where('tableNumber', '==', tableNumber), 
+                        where('locationLabel', '==', locationLabel),
+                        where('status', '==', 'open'),
+                        limit(1)
+                    );
+                } else {
+                    q = query(collection(firestore, 'sessions'), 
+                        where('tableNumber', '==', tableNumber), 
+                        where('status', '==', 'open'),
+                        limit(1)
+                    );
+                }
                 const snapshot = await getDocs(q);
                 if (!snapshot.empty) {
                     const doc = snapshot.docs[0];
@@ -498,7 +509,7 @@ export const db = {
                 return null;
             } else {
                 const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
-                const active = sessions.find(s => s.tableNumber === tableNumber && s.status === 'open');
+                const active = sessions.find(s => s.tableNumber === tableNumber && s.status === 'open' && (tableNumber < 10 || !locationLabel || s.locationLabel.toLowerCase() === locationLabel.toLowerCase()));
                 return active || null;
             }
         },
@@ -513,11 +524,12 @@ export const db = {
             }
             let completedCount = 0;
             if (firebaseInitialized) {
-                const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const { collection, getDocs, query, where, limit } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 const phoneVariants = [clean, '0' + clean, '91' + clean, '+91' + clean, '+91 ' + clean, '+91-' + clean];
                 const q = query(collection(firestore, 'sessions'), 
                     where('customerPhone', 'in', phoneVariants),
-                    where('status', '==', 'paid')
+                    where('status', '==', 'paid'),
+                    limit(15)
                 );
                 const snapshot = await getDocs(q);
                 snapshot.forEach(doc => {
