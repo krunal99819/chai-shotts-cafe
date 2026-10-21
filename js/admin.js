@@ -1771,6 +1771,30 @@ function bindBillManagerEvents() {
     }
     if (billStartInput) billStartInput.addEventListener('change', renderBillHistory);
     if (billEndInput) billEndInput.addEventListener('change', renderBillHistory);
+
+    // 8. Load All History Button (On-demand full collection fetch)
+    const btnLoadAllBills = document.getElementById('btnLoadAllBills');
+    if (btnLoadAllBills) {
+        btnLoadAllBills.addEventListener('click', async () => {
+            const originalHtml = btnLoadAllBills.innerHTML;
+            btnLoadAllBills.disabled = true;
+            btnLoadAllBills.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
+            try {
+                const allFetched = await db.sessions.getAll();
+                allSessions = allFetched;
+                renderBillHistory();
+                btnLoadAllBills.innerHTML = '<i class="fa-solid fa-check"></i> All History Loaded';
+                btnLoadAllBills.style.backgroundColor = '#e8f5e9';
+                btnLoadAllBills.style.color = '#2e7d32';
+                btnLoadAllBills.style.borderColor = '#a5d6a7';
+            } catch (err) {
+                console.error("Failed to load full bill history:", err);
+                alert("Failed to load all history. Please try again.");
+                btnLoadAllBills.disabled = false;
+                btnLoadAllBills.innerHTML = originalHtml;
+            }
+        });
+    }
 }
 
 function renderBillHistory() {
