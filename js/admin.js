@@ -725,10 +725,51 @@ function loadCheckoutDrawer(session) {
     });
     
     const subtotal = dynamicSubtotal;
-    let discount = 0;
-    if (session.loyaltyDiscountPercent > 0) {
-        discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
+
+    // Check reward points balance & redemption
+    let availablePoints = 0;
+    if (session.customerPhone) {
+        availablePoints = await db.sessions.getRewardPoints(session.customerPhone);
     }
+    
+    // Reward points percentage calculation:
+    // Upto 500 => 5%, Above 500 => 8%, Above 1000 => 10%
+    const earnPercent = db.sessions.calculateRewardPercentage(subtotal);
+    const pointsToEarn = Math.round(subtotal * (earnPercent / 100));
+
+    const rewardPointsRow = document.getElementById('checkoutRewardPointsRow');
+    const availablePointsSpan = document.getElementById('checkoutAvailablePoints');
+    const chkRedeem = document.getElementById('chkRedeemRewardPoints');
+    const pointsToEarnSpan = document.getElementById('checkoutPointsToEarn');
+    const rewardRuleNotice = document.getElementById('checkoutRewardRuleNotice');
+
+    let maxRedeemable = 0;
+    if (availablePoints > 0 && subtotal > 0) {
+        maxRedeemable = db.sessions.calculateMaxRedeemable(subtotal, availablePoints);
+    }
+
+    if (rewardPointsRow && availablePointsSpan) {
+        if (session.customerPhone && availablePoints > 0) {
+            rewardPointsRow.style.display = 'block';
+            availablePointsSpan.innerText = availablePoints;
+            if (rewardRuleNotice) {
+                rewardRuleNotice.innerText = `Redeem max ₹${maxRedeemable} (Max 30% of bill or ₹100)`;
+            }
+        } else {
+            rewardPointsRow.style.display = 'none';
+            if (chkRedeem) chkRedeem.checked = false;
+        }
+    }
+
+    if (pointsToEarnSpan) {
+        pointsToEarnSpan.innerText = `${pointsToEarn} (${earnPercent}%)`;
+    }
+
+    let discount = 0;
+    if (chkRedeem && chkRedeem.checked && maxRedeemable > 0) {
+        discount = maxRedeemable;
+    }
+
     const taxableSubtotal = Math.max(0, subtotal - discount);
     const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
     const grandTotal = taxableSubtotal + tax;
@@ -737,9 +778,11 @@ function loadCheckoutDrawer(session) {
     
     const discountRow = document.getElementById('checkoutDiscountRow');
     const discountSpan = document.getElementById('checkoutDiscount');
+    const discountLabel = document.getElementById('checkoutDiscountLabel');
     if (discountRow && discountSpan) {
         if (discount > 0) {
             discountRow.style.display = 'flex';
+            if (discountLabel) discountLabel.innerText = `Reward Points Redeemed (${discount} pts)`;
             discountSpan.innerText = `-₹${discount}`;
         } else {
             discountRow.style.display = 'none';
@@ -748,6 +791,14 @@ function loadCheckoutDrawer(session) {
     
     elements.checkoutTax.innerText = `₹${tax}`;
     elements.checkoutGrandTotal.innerText = `₹${grandTotal}`;
+
+    // Re-calculate when cashier toggles redeem checkbox
+    if (chkRedeem && !chkRedeem.dataset.bound) {
+        chkRedeem.dataset.bound = "true";
+        chkRedeem.addEventListener('change', () => {
+            loadCheckoutDrawer(session);
+        });
+    }
 }
 
 function resetCheckoutPanel() {
@@ -764,27 +815,61 @@ function setupCheckoutActions() {
             if (!selectedSession) return;
             const method = e.currentTarget.dataset.method;
             
-            const subtotal = selectedSession.totalAmount;
-            let discount = 0;
-            if (selectedSession.loyaltyDiscountPercent > 0) {
-                discount = Math.round(subtotal * (selectedSession.loyaltyDiscountPercent / 100));
+            const subtotal = selectedSession.totalAmount || 0;
+            
+            // Check if redeem points checkbox is selected
+            const chkRedeem = document.getElementById('chkRedeemRewardPoints');
+            let pointsToRedeem = 0;
+            let availablePoints = 0;
+
+            if (selectedSession.customerPhone) {
+                availablePoints = await db.sessions.getRewardPoints(selectedSession.customerPhone);
+                if (chkRedeem && chkRedeem.checked && availablePoints > 0) {
+                    pointsToRedeem = db.sessions.calculateMaxRedeemable(subtotal, availablePoints);
+                }
             }
+
+            const discount = pointsToRedeem;
             const taxableSubtotal = Math.max(0, subtotal - discount);
             const tax = gstEnabled ? Math.round(taxableSubtotal * 0.05) : 0;
             const checkoutGrandTotal = taxableSubtotal + tax;
 
-            if (confirm(`Confirm checkout of ₹${checkoutGrandTotal} (Subtotal: ₹${subtotal}, Discount: -₹${discount}, GST: ₹${tax}) for Table ${selectedSession.tableNumber} using [${method}]?`)) {
-                // 1. Close table session
-                await db.sessions.close(selectedSession.id, method);
+            // Calculate points earned on current checkout
+            const earnPercent = db.sessions.calculateRewardPercentage(subtotal);
+            const pointsEarned = Math.round(subtotal * (earnPercent / 100));
+
+            let confirmMsg = `Confirm checkout of ₹${checkoutGrandTotal} (Subtotal: ₹${subtotal}, Points Redeemed: -₹${discount}, GST: ₹${tax}) for Table ${selectedSession.tableNumber} using [${method}]?`;
+            if (pointsEarned > 0) {
+                confirmMsg += `\nCustomer will earn +${pointsEarned} Reward Points (${earnPercent}%).`;
+            }
+
+            if (confirm(confirmMsg)) {
+                // 1. Process customer cumulative points in database
+                let updatedBalance = availablePoints;
+                if (selectedSession.customerPhone) {
+                    const netPointChange = pointsEarned - pointsToRedeem;
+                    updatedBalance = await db.sessions.updateCustomerRewardPoints(
+                        selectedSession.customerPhone, 
+                        netPointChange,
+                        `Table ${selectedSession.tableNumber} checkout`
+                    );
+                }
+
+                // 2. Close table session with reward details for audit & CSV
+                await db.sessions.close(selectedSession.id, method, {
+                    pointsRedeemed: pointsToRedeem,
+                    pointsEarned: pointsEarned,
+                    newBalance: updatedBalance
+                });
                 
-                // 2. Resolve any pending bill requests for this table
+                // 3. Resolve any pending bill requests for this table
                 const billRequests = allRequests.filter(r => r.tableNumber === selectedSession.tableNumber && r.status === 'pending' && r.type.includes('bill'));
                 for (let req of billRequests) {
                     await db.requests.complete(req.id);
                 }
 
-                // 3. Clear Table POS selection
-                alert(`Table ${selectedSession.tableNumber} checked out successfully.`);
+                // 4. Clear Table POS selection
+                alert(`Table ${selectedSession.tableNumber} checked out successfully.\nReward Points Earned: +${pointsEarned}\nPoints Redeemed: -${pointsToRedeem}\nCustomer Balance: ${updatedBalance} pts.`);
                 resetCheckoutPanel();
             }
         });
@@ -878,8 +963,8 @@ function reprintPOSInvoice(session, orders) {
     doc.line(margin, y, 80 - margin, y);
 
     // Calculations
-    let discount = 0;
-    if (session.loyaltyDiscountPercent > 0) {
+    let discount = session.pointsRedeemed || 0;
+    if (session.loyaltyDiscountPercent > 0 && !discount) {
         discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
     }
 
@@ -893,7 +978,7 @@ function reprintPOSInvoice(session, orders) {
 
     if (discount > 0) {
         y += 4;
-        doc.text("Loyalty Discount (10%):", 48, y, { align: "right" });
+        doc.text("Reward Redeemed:", 48, y, { align: "right" });
         doc.text(`-₹${discount}`, 80 - margin, y, { align: "right" });
     }
 
@@ -1114,11 +1199,21 @@ function renderRequestsQueue() {
         });
     });
     
-    // Bind approve button
+    // Bind approve button (Handles table join requests & captures guest details into session)
     elements.adminRequestsContainer.querySelectorAll('.btn-approve-request').forEach(btn => {
         btn.addEventListener('click', async (e) => {
             const reqId = e.currentTarget.dataset.reqId;
             e.currentTarget.disabled = true;
+            
+            const req = allRequests.find(r => r.id === reqId);
+            if (req && req.type === 'join_session' && req.sessionId) {
+                try {
+                    await db.sessions.addGuest(req.sessionId, req.joinName || "Guest", req.joinPhone || "");
+                } catch (err) {
+                    console.error("Failed to append guest to session:", err);
+                }
+            }
+            
             await db.requests.updateStatus(reqId, 'completed');
         });
     });
@@ -1924,12 +2019,25 @@ function renderBillHistory() {
             actionBtn = `<button class="btn-secondary btn-view-bill-detail" data-id="${session.id}" style="padding: 6px 12px; font-size:0.75rem;"><i class="fa-solid fa-receipt"></i> View Receipt</button>`;
         }
         
+        // Format customer name & all joined guest numbers
+        let customerDisplay = session.customerName || "N/A";
+        let phonesList = [session.customerPhone].filter(Boolean);
+        
+        if (session.additionalGuests && session.additionalGuests.length > 0) {
+            const guestNames = session.additionalGuests.map(g => g.name).join(', ');
+            customerDisplay += `<div style="font-size:0.75rem; color:#2e7d32; font-weight:600; margin-top:2px;"><i class="fa-solid fa-users"></i> +${session.additionalGuests.length} Guests: ${guestNames}</div>`;
+            session.additionalGuests.forEach(g => {
+                if (g.phone && !phonesList.includes(g.phone)) phonesList.push(g.phone);
+            });
+        }
+        const phoneDisplay = phonesList.join('<br>') || "N/A";
+
         html += `
             <tr style="border-bottom:1px solid var(--color-border);">
                 <td style="padding:10px;">${dateStr}</td>
                 <td style="padding:10px; font-weight:bold;">${locLabel}</td>
-                <td style="padding:10px;">${session.customerName}</td>
-                <td style="padding:10px;">${session.customerPhone || "N/A"}</td>
+                <td style="padding:10px;">${customerDisplay}</td>
+                <td style="padding:10px; line-height:1.4;">${phoneDisplay}</td>
                 <td style="padding:10px;">${statusBadge}</td>
                 <td style="padding:10px; text-align:right; font-weight:bold; font-family:var(--font-heading);">₹${grandTotal}</td>
                 <td style="padding:10px; text-align:center;">${actionBtn}</td>
@@ -1954,15 +2062,19 @@ function exportBillsToCSV() {
         return;
     }
     
-    // CSV Headers
+    // CSV Headers with Cumulative Reward Points & Points Redeemed
     const headers = [
         "Date & Time",
         "Location",
-        "Customer Name",
-        "Phone Number",
+        "Primary Customer Name",
+        "Primary Phone Number",
+        "All Joined Guests",
+        "All Contact Numbers",
         "Status",
         "Subtotal (INR)",
-        "Discount (INR)",
+        "Points Redeemed (INR)",
+        "Points Earned",
+        "Cumulative Points Balance",
         "GST Tax (INR)",
         "Grand Total (INR)",
         "Payment Method",
@@ -1977,12 +2089,26 @@ function exportBillsToCSV() {
         const name = (session.customerName || "N/A").replace(/,/g, '');
         const phone = session.customerPhone || "N/A";
         const status = session.status === 'open' ? 'Open' : 'Paid';
+
+        // Extract joined guests
+        let guestNames = "None";
+        let allPhonesList = [phone].filter(p => p && p !== "N/A");
+        if (session.additionalGuests && session.additionalGuests.length > 0) {
+            guestNames = session.additionalGuests.map(g => g.name).join(" | ").replace(/,/g, '');
+            session.additionalGuests.forEach(g => {
+                if (g.phone && !allPhonesList.includes(g.phone)) allPhonesList.push(g.phone);
+            });
+        }
+        const allPhonesStr = `"${allPhonesList.join(', ')}"`;
         
         const subtotal = session.totalAmount || 0;
-        let discount = 0;
-        if (session.loyaltyDiscountPercent > 0) {
+        let discount = session.pointsRedeemed || 0;
+        if (session.loyaltyDiscountPercent > 0 && !discount) {
             discount = Math.round(subtotal * (session.loyaltyDiscountPercent / 100));
         }
+        const pointsEarned = session.pointsEarned || 0;
+        const cumBalance = session.finalRewardBalance !== undefined ? session.finalRewardBalance : (session.rewardPointsAvailable || 0);
+
         const taxableTotal = Math.max(0, subtotal - discount);
         const tax = gstEnabled ? Math.round(taxableTotal * 0.05) : 0;
         const grandTotal = taxableTotal + tax;
@@ -1995,9 +2121,13 @@ function exportBillsToCSV() {
             `"${locLabel}"`,
             `"${name}"`,
             `"${phone}"`,
+            `"${guestNames}"`,
+            allPhonesStr,
             `"${status}"`,
             subtotal,
             discount,
+            pointsEarned,
+            cumBalance,
             tax,
             grandTotal,
             `"${paymentMethod}"`,

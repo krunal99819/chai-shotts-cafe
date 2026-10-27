@@ -211,8 +211,22 @@
                                         <span>Subtotal</span>
                                         <span id="checkoutSubtotal">₹0</span>
                                     </div>
+                                    
+                                    <!-- Reward Points Section in Cashout Drawer -->
+                                    <div id="checkoutRewardPointsRow" style="display:none; background:#f4f9f4; border:1px solid #c8e6c9; border-radius:8px; padding:8px 10px; margin:4px 0;">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.82rem;">
+                                            <span style="color:#2e7d32; font-weight:700;"><i class="fa-solid fa-coins"></i> Points Available: <span id="checkoutAvailablePoints">0</span></span>
+                                            <label style="display:flex; align-items:center; gap:4px; font-weight:600; cursor:pointer; color:#1b5e20;">
+                                                <input type="checkbox" id="chkRedeemRewardPoints" style="cursor:pointer;"> Redeem
+                                            </label>
+                                        </div>
+                                        <div id="checkoutRewardRuleNotice" style="font-size:0.72rem; color:#666; margin-top:2px;">
+                                            Rule: Max 30% of bill or Max ₹100
+                                        </div>
+                                    </div>
+
                                     <div id="checkoutDiscountRow" style="display:none; justify-content:space-between; color:#1e7e34; font-weight:600;">
-                                        <span>Loyalty Discount (10% Off)</span>
+                                        <span id="checkoutDiscountLabel">Reward Points Redeemed</span>
                                         <span id="checkoutDiscount">-₹0</span>
                                     </div>
                                     <div style="display:flex; justify-content:space-between; color:var(--color-text-muted);">
@@ -222,6 +236,10 @@
                                     <div style="display:flex; justify-content:space-between; font-weight:700; font-size:1.15rem; color:var(--color-primary-deep); margin-top:8px; border-top:1px solid var(--color-border); padding-top:8px;">
                                         <span>Grand Total</span>
                                         <span id="checkoutGrandTotal">₹0</span>
+                                    </div>
+                                    <!-- Points to Earn on Checkout -->
+                                    <div id="checkoutEarningRow" style="font-size:0.75rem; color:#f39c12; font-weight:700; text-align:right; margin-top:2px;">
+                                        Earns: <span id="checkoutPointsToEarn">0</span> Points
                                     </div>
                                 </div>
 
@@ -744,6 +762,6 @@
     <div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <!-- Application Script -->
-    <script type="module" src="js/admin.js?v=34"></script>
+    <script type="module" src="js/admin.js?v=35"></script>
 </body>
 </html>

@@ -64,5 +64,10 @@ service cloud.firestore {
       allow read: if true; // Publicly readable for customer timings and tax details
       allow write: if isStaff(); // Editable only by staff
     }
+
+    // Customers (Loyalty & Reward Points)
+    match /customers/{customerPhone} {
+      allow read, write: if true;
+    }
   }
 }

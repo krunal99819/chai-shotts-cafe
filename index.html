@@ -59,16 +59,22 @@
             </div>
         </header>
 
-        <!-- Loyalty Card Widget (Shown once session is active) -->
-        <div id="loyaltyCardContainer" class="loyalty-card" style="display: none;">
-            <div class="loyalty-header">
-                <span><i class="fa-solid fa-mug-hot"></i> Chai Shotts Loyalty Program</span>
-                <span class="loyalty-info-icon" onclick="alert('How it works:\n1. Collect a stamp for every paid visit above ₹299.\n2. Visit 3: Get 1 FREE Cold Coffee.\n3. Visit 5: Get 10% OFF on your 5th bill.\n4. Visit 7: Get 1 FREE Margherita Pizza 7\".\n5. Visit 10: Get a FREE Private Movie Room session for 2 persons!\n* Rewards are added automatically on orders above ₹299.')"><i class="fa-solid fa-circle-info"></i> Info</span>
+        <!-- Reward Points Widget (Shown once session is active) -->
+        <div id="loyaltyCardContainer" class="loyalty-card" style="display: none; background: linear-gradient(135deg, var(--color-primary-deep), var(--color-primary-mid)); border-radius: var(--radius-md); padding: 14px 18px; margin: 12px 0; color: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.15);">
+            <div class="loyalty-header" style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:700; font-size:0.95rem; color:var(--color-accent-gold);"><i class="fa-solid fa-coins"></i> Chai Shotts Reward Points</span>
+                <span class="loyalty-info-icon" style="font-size:0.75rem; background:rgba(255,255,255,0.15); padding:3px 8px; border-radius:12px; cursor:pointer;" onclick="alert('Chai Shotts Reward System:\n1. Earn points on every bill:\n   - Upto ₹500: Earn 5%\n   - Above ₹500: Earn 8%\n   - Above ₹1000: Earn 10%\n2. 1 Point = ₹1 Discount on your next visits.\n3. Max redeemable on a visit: Max 30% of bill or Max ₹100 (whichever is lower).')"><i class="fa-solid fa-circle-info"></i> How it works</span>
             </div>
-            <div class="loyalty-status-msg" id="loyaltyStatusText">Step 1 of 10 (Next Reward: Cold Coffee at Step 3)</div>
-            <div class="loyalty-stamps-grid" id="loyaltyStampsGrid">
-                <!-- 10 stamp items will be dynamically generated here -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:8px;">
+                <div>
+                    <div style="font-size:0.75rem; opacity:0.85;">Your Available Points</div>
+                    <div id="loyaltyStatusText" style="font-size:1.4rem; font-weight:800; color:#fff; letter-spacing:0.5px;">0 Points</div>
+                </div>
+                <div style="text-align:right; font-size:0.72rem; color:var(--color-accent-gold); font-weight:600;">
+                    1 Point = ₹1 Off on next visit
+                </div>
             </div>
+            <div id="loyaltyStampsGrid" style="display:none;"></div>
         </div>
 
         <!-- Live Order Status Tracker (Hidden by default, shown if there are active orders) -->
@@ -429,6 +435,6 @@
     </div>
 
     <!-- Trigger Rebuild -->
-    <script type="module" src="js/customer.js?v=33"></script>
+    <script type="module" src="js/customer.js?v=35"></script>
 </body>
 </html>

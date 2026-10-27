@@ -18,7 +18,10 @@ export function cleanPhoneNumber(phone) {
 }
 
 // Check configuration and initialize Firebase if set
-const useFirebase = isFirebaseConfigured();
+// Offline / Test Isolation: If URL contains ?offline=true or in localhost with test param, use Mock DB to prevent disturbing live Firebase
+const urlParams = new URLSearchParams(window.location.search);
+const forceOffline = urlParams.get('offline') === 'true' || window.location.hostname === '127.0.0.1';
+const useFirebase = isFirebaseConfigured() && !forceOffline;
 
 if (useFirebase) {
     try {
@@ -513,47 +516,70 @@ export const db = {
                 return active || null;
             }
         },
+        // Helper to calculate reward points percentage based on subtotal
+        calculateRewardPercentage(amount) {
+            if (amount > 1000) return 10;
+            if (amount > 500) return 8;
+            return 5;
+        },
+
+        // Fetch cumulative reward points balance for a phone number
+        async getRewardPoints(customerPhone) {
+            const clean = cleanPhoneNumber(customerPhone);
+            if (!clean) return 0;
+
+            if (firebaseInitialized) {
+                const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                const docSnap = await getDoc(doc(firestore, 'customers', clean));
+                if (docSnap.exists()) {
+                    return docSnap.data().rewardPoints || 0;
+                }
+                return 0;
+            } else {
+                const customers = JSON.parse(localStorage.getItem('cs_customers') || '{}');
+                return (customers[clean] && customers[clean].rewardPoints) || 0;
+            }
+        },
+
+        // Update reward points for customer in customer profile & log history
+        async updateCustomerRewardPoints(customerPhone, pointsChange, reason = "") {
+            const clean = cleanPhoneNumber(customerPhone);
+            if (!clean) return 0;
+
+            if (firebaseInitialized) {
+                const { doc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                await setDoc(doc(firestore, 'customers', clean), {
+                    phone: clean,
+                    rewardPoints: increment(pointsChange),
+                    updatedAt: Date.now()
+                }, { merge: true });
+                return await this.getRewardPoints(clean);
+            } else {
+                const customers = JSON.parse(localStorage.getItem('cs_customers') || '{}');
+                if (!customers[clean]) customers[clean] = { phone: clean, rewardPoints: 0 };
+                customers[clean].rewardPoints = Math.max(0, Math.round(((customers[clean].rewardPoints || 0) + pointsChange) * 100) / 100);
+                customers[clean].updatedAt = Date.now();
+                localStorage.setItem('cs_customers', JSON.stringify(customers));
+                return customers[clean].rewardPoints;
+            }
+        },
+
+        // Calculate max redeemable reward points on current subtotal:
+        // Rule: Max 30% of bill OR Max ₹100, whichever is lower, capped by available balance
+        calculateMaxRedeemable(subtotal, availablePoints) {
+            if (!availablePoints || availablePoints <= 0 || !subtotal || subtotal <= 0) return 0;
+            const maxPercentAmount = Math.floor(subtotal * 0.30);
+            const maxAllowed = Math.min(100, maxPercentAmount);
+            return Math.min(availablePoints, maxAllowed);
+        },
+
         async calculateLoyalty(customerPhone) {
             const clean = cleanPhoneNumber(customerPhone);
-            if (!clean) {
-                return {
-                    loyaltyStep: 1,
-                    loyaltyDiscountPercent: 0,
-                    loyaltyFreeItemReward: null
-                };
-            }
-            let completedCount = 0;
-            if (firebaseInitialized) {
-                const { collection, getDocs, query, where, limit } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                const phoneVariants = [clean, '0' + clean, '91' + clean, '+91' + clean, '+91 ' + clean, '+91-' + clean];
-                const q = query(collection(firestore, 'sessions'), 
-                    where('customerPhone', 'in', phoneVariants),
-                    where('status', '==', 'paid'),
-                    limit(15)
-                );
-                const snapshot = await getDocs(q);
-                snapshot.forEach(doc => {
-                    const data = doc.data();
-                    if ((data.totalAmount || 0) >= 299) {
-                        completedCount++;
-                    }
-                });
-            } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
-                completedCount = sessions.filter(s => cleanPhoneNumber(s.customerPhone) === clean && s.status === 'paid' && (s.totalAmount || 0) >= 299).length;
-            }
-            const loyaltyStep = completedCount + 1;
-            const cycleStep = completedCount % 10;
-            let loyaltyDiscountPercent = (cycleStep === 4) ? 10 : 0;
-            let loyaltyFreeItemReward = null;
-            if (cycleStep === 2) loyaltyFreeItemReward = "Cold Coffee";
-            else if (cycleStep === 6) loyaltyFreeItemReward = "Margherita Pizza 7\"";
-            else if (cycleStep === 9) loyaltyFreeItemReward = "Private Movie Room for 2 Persons";
-            
+            const availablePoints = await this.getRewardPoints(clean);
             return {
-                loyaltyStep,
-                loyaltyDiscountPercent,
-                loyaltyFreeItemReward
+                rewardPointsAvailable: availablePoints,
+                pointsRedeemed: 0,
+                pointsEarned: 0
             };
         },
         async create(tableNumber, customerName, customerPhone = "", locationLabel = "", orderZone = "table") {
@@ -587,21 +613,25 @@ export const db = {
                 return newSession;
             }
         },
-        async close(sessionId, paymentMethod) {
+        async close(sessionId, paymentMethod, rewardDetails = {}) {
+            const { pointsRedeemed = 0, pointsEarned = 0, newBalance = 0 } = rewardDetails;
+            const updatePayload = {
+                status: 'paid',
+                closedAt: Date.now(),
+                paymentMethod,
+                pointsRedeemed: pointsRedeemed || 0,
+                pointsEarned: pointsEarned || 0,
+                finalRewardBalance: newBalance || 0
+            };
+
             if (firebaseInitialized) {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                await updateDoc(doc(firestore, 'sessions', sessionId), {
-                    status: 'paid',
-                    closedAt: Date.now(),
-                    paymentMethod
-                });
+                await updateDoc(doc(firestore, 'sessions', sessionId), updatePayload);
             } else {
                 const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
-                    sessions[idx].status = 'paid';
-                    sessions[idx].closedAt = Date.now();
-                    sessions[idx].paymentMethod = paymentMethod;
+                    sessions[idx] = { ...sessions[idx], ...updatePayload };
                     localStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }
@@ -745,6 +775,32 @@ export const db = {
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
                     sessions[idx].totalAmount = newTotalAmount;
+                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    mockDB.trigger('sessions', sessions);
+                }
+            }
+        },
+        async addGuest(sessionId, guestName, guestPhone) {
+            const cleanPhone = cleanPhoneNumber(guestPhone);
+            const guestObj = {
+                name: guestName,
+                phone: cleanPhone,
+                joinedAt: Date.now()
+            };
+            if (firebaseInitialized) {
+                const { doc, updateDoc, arrayUnion } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                await updateDoc(doc(firestore, 'sessions', sessionId), {
+                    additionalGuests: arrayUnion(guestObj)
+                });
+            } else {
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const idx = sessions.findIndex(s => s.id === sessionId);
+                if (idx !== -1) {
+                    if (!sessions[idx].additionalGuests) sessions[idx].additionalGuests = [];
+                    // Avoid duplicate guest entry
+                    if (!sessions[idx].additionalGuests.some(g => g.phone === cleanPhone)) {
+                        sessions[idx].additionalGuests.push(guestObj);
+                    }
                     localStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }

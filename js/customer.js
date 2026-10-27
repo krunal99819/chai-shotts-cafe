@@ -571,12 +571,11 @@ function handleSessionUpdate(session) {
     }
 }
 
-function renderLoyaltyCard(session) {
+async function renderLoyaltyCard(session) {
     const container = document.getElementById('loyaltyCardContainer');
     const statusText = document.getElementById('loyaltyStatusText');
-    const stampsGrid = document.getElementById('loyaltyStampsGrid');
     
-    if (!container || !statusText || !stampsGrid) return;
+    if (!container || !statusText) return;
     
     if (!session || !session.customerPhone) {
         container.style.display = 'none';
@@ -585,48 +584,15 @@ function renderLoyaltyCard(session) {
     
     container.style.display = 'block';
     
-    const step = session.loyaltyStep || 1;
-    const cycleStep = (step - 1) % 10; // 0-indexed step in the 10-stamp card
-    
-    let nextRewardMsg = "";
-    if (cycleStep < 2) nextRewardMsg = `(Next Reward: Free Cold Coffee at Step 3)`;
-    else if (cycleStep < 4) nextRewardMsg = `(Next Reward: 10% OFF Bill at Step 5)`;
-    else if (cycleStep < 6) nextRewardMsg = `(Next Reward: Free Margherita Pizza at Step 7)`;
-    else if (cycleStep < 9) nextRewardMsg = `(Next Reward: Free Private Movie Room at Step 10)`;
-    else nextRewardMsg = `(Completed! You are on Step 10. Private Movie Room Free!)`;
-
-    statusText.innerText = `Step ${cycleStep + 1} of 10 ${nextRewardMsg}`;
-    
-    let gridHtml = "";
-    for (let i = 0; i < 10; i++) {
-        let classes = "loyalty-stamp-slot";
-        let content = "";
-        
-        if (i < cycleStep) {
-            classes += " stamped";
-            content = `<span class="loyalty-stamp-number">${i + 1}</span>`;
-        } else if (i === cycleStep) {
-            classes += " active-step";
-            content = `<span class="loyalty-stamp-number">${i + 1}</span>`;
-        } else {
-            content = `<span class="loyalty-stamp-number">${i + 1}</span>`;
-        }
-        
-        // Add little label tag inside slots for rewards
-        let rewardTag = "";
-        if (i === 2) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-glass-water"></i> Coffee</span>`;
-        else if (i === 4) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-percent"></i> 10% Off</span>`;
-        else if (i === 6) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-pizza-slice"></i> Pizza</span>`;
-        else if (i === 9) rewardTag = `<span class="loyalty-stamp-gift"><i class="fa-solid fa-film"></i> Movie</span>`;
-        
-        gridHtml += `
-            <div class="${classes}">
-                ${content}
-                ${rewardTag}
-            </div>
-        `;
+    // Fetch live cumulative points balance
+    let points = session.rewardPointsAvailable || 0;
+    try {
+        points = await db.sessions.getRewardPoints(session.customerPhone);
+    } catch (e) {
+        console.error("Failed to load points:", e);
     }
-    stampsGrid.innerHTML = gridHtml;
+    
+    statusText.innerText = `${points} Points (₹${points} Value)`;
 }
 
 // ==========================================================================
@@ -1020,37 +986,8 @@ function bindMenuCartButtons() {
 }
 
 function adjustLoyaltyFreeRewardInCart() {
-    if (!activeSession || !activeSession.loyaltyFreeItemReward) return;
-    
-    const rewardItemName = activeSession.loyaltyFreeItemReward;
-    const rewardProductId = `reward_${rewardItemName.replace(/\s+/g, '_').toLowerCase()}`;
-    
-    // Calculate subtotal of non-free items
-    let subtotal = 0;
-    Object.keys(cart).forEach(pId => {
-        if (pId !== rewardProductId) {
-            subtotal += cart[pId].product.price * cart[pId].quantity;
-        }
-    });
-    
-    if (subtotal >= 299) {
-        if (!cart[rewardProductId]) {
-            cart[rewardProductId] = {
-                product: {
-                    id: rewardProductId,
-                    name: `${rewardItemName} (Free Loyalty Reward)`,
-                    price: 0,
-                    isFree: true
-                },
-                quantity: 1,
-                notes: "Loyalty Program Reward"
-            };
-        }
-    } else {
-        if (cart[rewardProductId]) {
-            delete cart[rewardProductId];
-        }
-    }
+    // 10-stamp free reward replaced with percentage-based Reward Points engine
+    return;
 }
 
 function updateCartQty(productId, newQty) {
