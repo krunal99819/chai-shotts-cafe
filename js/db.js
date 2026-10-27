@@ -19,8 +19,9 @@ export function cleanPhoneNumber(phone) {
 
 // Check configuration and initialize Firebase if set
 // Offline / Test Isolation: If URL contains ?offline=true or in localhost with test param, use Mock DB to prevent disturbing live Firebase
-const urlParams = new URLSearchParams(window.location.search);
-const forceOffline = urlParams.get('offline') === 'true' || window.location.hostname === '127.0.0.1';
+const isBrowser = typeof window !== 'undefined';
+const urlParams = isBrowser ? new URLSearchParams(window.location.search) : new URLSearchParams();
+const forceOffline = urlParams.get('offline') === 'true' || (isBrowser && window.location.hostname === '127.0.0.1') || !isBrowser;
 const useFirebase = isFirebaseConfigured() && !forceOffline;
 
 if (useFirebase) {
@@ -95,7 +96,7 @@ const mockDB = {
     },
 
     setupStorageListeners() {
-        window.addEventListener('storage', (e) => {
+        if (typeof window !== 'undefined') window.addEventListener('storage', (e) => {
             if (e.key === 'cs_categories' && e.newValue) {
                 mockDB.trigger('categories', JSON.parse(e.newValue));
             }
