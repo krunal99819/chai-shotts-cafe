@@ -642,7 +642,7 @@ function renderFloorLayoutMap() {
     }
 }
 
-function loadCheckoutDrawer(session) {
+async function loadCheckoutDrawer(session) {
     selectedSession = session;
     elements.checkoutPanelEmpty.style.display = 'none';
     elements.checkoutPanelActive.style.display = 'block';
