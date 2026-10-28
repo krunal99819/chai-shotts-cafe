@@ -514,8 +514,8 @@ async function handleCreateSession() {
         if (notice) notice.remove();
         
     } catch (e) {
-        console.error(e);
-        showToast("Failed to start session. Please try again.", 'error');
+        console.error("Failed to start session:", e);
+        showToast("Failed to start session: " + (e.message || "Please check details"), 'error');
     } finally {
         elements.btnStartSession.disabled = false;
         elements.btnStartSession.innerHTML = originalBtnText;

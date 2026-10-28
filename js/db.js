@@ -530,12 +530,17 @@ export const db = {
             if (!clean) return 0;
 
             if (firebaseInitialized) {
-                const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                const docSnap = await getDoc(doc(firestore, 'customers', clean));
-                if (docSnap.exists()) {
-                    return docSnap.data().rewardPoints || 0;
+                try {
+                    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                    const docSnap = await getDoc(doc(firestore, 'customers', clean));
+                    if (docSnap.exists()) {
+                        return docSnap.data().rewardPoints || 0;
+                    }
+                    return 0;
+                } catch (err) {
+                    console.warn("Could not read customer reward points from Firestore (falling back to 0):", err);
+                    return 0;
                 }
-                return 0;
             } else {
                 const customers = JSON.parse(localStorage.getItem('cs_customers') || '{}');
                 return (customers[clean] && customers[clean].rewardPoints) || 0;
@@ -548,13 +553,18 @@ export const db = {
             if (!clean) return 0;
 
             if (firebaseInitialized) {
-                const { doc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                await setDoc(doc(firestore, 'customers', clean), {
-                    phone: clean,
-                    rewardPoints: increment(pointsChange),
-                    updatedAt: Date.now()
-                }, { merge: true });
-                return await this.getRewardPoints(clean);
+                try {
+                    const { doc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                    await setDoc(doc(firestore, 'customers', clean), {
+                        phone: clean,
+                        rewardPoints: increment(pointsChange),
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                    return await this.getRewardPoints(clean);
+                } catch (err) {
+                    console.warn("Could not update customer reward points in Firestore:", err);
+                    return 0;
+                }
             } else {
                 const customers = JSON.parse(localStorage.getItem('cs_customers') || '{}');
                 if (!customers[clean]) customers[clean] = { phone: clean, rewardPoints: 0 };
