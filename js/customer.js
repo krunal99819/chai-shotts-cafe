@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=21';
+import db, { cleanPhoneNumber } from './db.js?v=38';
 import soundEffects from './audio.js';
 
 // State Variables
