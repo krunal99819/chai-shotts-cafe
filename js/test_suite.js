@@ -42,16 +42,26 @@ assert(Math.round(1200 * (db.sessions.calculateRewardPercentage(1200) / 100)) ==
 
 // 2. Redemption Rule Test:
 // Rule: Max 30% of bill OR Max ₹100, whichever is lower, capped by available balance
-// Subtotal 200 (30% = 60; min(100, 60) = 60). Available = 100 => Redeem 60.
 assert(db.sessions.calculateMaxRedeemable(200, 100) === 60, "Subtotal ₹200 with 100 pts: Max redeemable is 60 (30%)");
-
-// Subtotal 500 (30% = 150; min(100, 150) = 100). Available = 200 => Redeem 100 (Max 100 limit kicks in).
 assert(db.sessions.calculateMaxRedeemable(500, 200) === 100, "Subtotal ₹500 with 200 pts: Capped at ₹100 max");
-
-// Subtotal 500. Available = 40 => Redeem 40 (Capped by balance).
 assert(db.sessions.calculateMaxRedeemable(500, 40) === 40, "Subtotal ₹500 with 40 pts: Capped at balance 40");
 
-// 3. Multi-Guest Array Test:
+// 3. Cumulative Balance Test across multiple visits:
+// Visit 1: Bill ₹5000 -> Earns 500 pts.
+// Visit 2: Redeems 100 pts.
+// Visit 3: Redeems 100 pts.
+// Balance should be exactly 300 pts!
+const mockHistory = [
+    { customerPhone: "9999999999", status: "paid", totalAmount: 5000, pointsEarned: 500, pointsRedeemed: 0 },
+    { customerPhone: "9999999999", status: "paid", totalAmount: 1000, pointsEarned: 0, pointsRedeemed: 100 },
+    { customerPhone: "9999999999", status: "paid", totalAmount: 800, pointsEarned: 0, pointsRedeemed: 100 }
+];
+globalThis.localStorage.setItem('cs_sessions', JSON.stringify(mockHistory));
+
+const balanceCheck = await db.sessions.getRewardPoints("9999999999");
+assert(balanceCheck === 300, `Cumulative balance: Started with 500, used 100, used 100 => 300 remaining (Got: ${balanceCheck})`);
+
+// 4. Multi-Guest Array Test:
 const mockSession = {
     id: "test_session_101",
     tableNumber: 4,

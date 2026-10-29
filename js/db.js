@@ -525,25 +525,47 @@ export const db = {
         },
 
         // Fetch cumulative reward points balance for a phone number
+        // Calculated directly from paid sessions history (Earned - Redeemed) so it works seamlessly without extra collection rules
         async getRewardPoints(customerPhone) {
             const clean = cleanPhoneNumber(customerPhone);
             if (!clean) return 0;
 
             if (firebaseInitialized) {
                 try {
-                    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                    const docSnap = await getDoc(doc(firestore, 'customers', clean));
-                    if (docSnap.exists()) {
-                        return docSnap.data().rewardPoints || 0;
-                    }
-                    return 0;
+                    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                    const phoneVariants = [clean, '0' + clean, '91' + clean, '+91' + clean, '+91 ' + clean, '+91-' + clean];
+                    const q = query(
+                        collection(firestore, 'sessions'),
+                        where('status', '==', 'paid'),
+                        where('customerPhone', 'in', phoneVariants)
+                    );
+                    const snapshot = await getDocs(q);
+                    let totalEarned = 0;
+                    let totalRedeemed = 0;
+                    snapshot.forEach(docSnap => {
+                        const data = docSnap.data();
+                        if (data.pointsEarned) {
+                            totalEarned += Number(data.pointsEarned) || 0;
+                        }
+                        if (data.pointsRedeemed) {
+                            totalRedeemed += Number(data.pointsRedeemed) || 0;
+                        }
+                    });
+                    return Math.max(0, Math.round(totalEarned - totalRedeemed));
                 } catch (err) {
-                    console.warn("Could not read customer reward points from Firestore (falling back to 0):", err);
+                    console.warn("Could not calculate reward points from sessions (falling back to 0):", err);
                     return 0;
                 }
             } else {
-                const customers = JSON.parse(localStorage.getItem('cs_customers') || '{}');
-                return (customers[clean] && customers[clean].rewardPoints) || 0;
+                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const paidSessions = sessions.filter(s => cleanPhoneNumber(s.customerPhone) === clean && s.status === 'paid');
+                let totalEarned = 0;
+                let totalRedeemed = 0;
+                paidSessions.forEach(s => {
+                    if (s.pointsEarned) totalEarned += Number(s.pointsEarned) || 0;
+                    if (s.pointsRedeemed) totalRedeemed += Number(s.pointsRedeemed) || 0;
+                });
+                return Math.max(0, Math.round(totalEarned - totalRedeemed));
             }
         },
 
