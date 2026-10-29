@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=39';
+import db, { cleanPhoneNumber } from './db.js?v=40';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -753,7 +753,7 @@ async function loadCheckoutDrawer(session) {
             rewardPointsRow.style.display = 'block';
             availablePointsSpan.innerText = availablePoints;
             if (rewardRuleNotice) {
-                rewardRuleNotice.innerText = `Redeem max ₹${maxRedeemable} (Max 30% of bill or ₹100)`;
+                rewardRuleNotice.innerText = `Redeem max ₹${maxRedeemable} (Max 20% of bill or ₹100)`;
             }
         } else {
             rewardPointsRow.style.display = 'none';

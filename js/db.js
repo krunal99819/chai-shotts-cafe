@@ -524,11 +524,56 @@ export const db = {
             return 5;
         },
 
-        // Fetch cumulative reward points balance for a phone number
-        // Calculated directly from paid sessions history (Earned - Redeemed) so it works seamlessly without extra collection rules
-        async getRewardPoints(customerPhone) {
+        // Fetch active cumulative reward points balance for a phone number
+        // Calculated with FIFO (First-In, First-Out) and 30-day expiry rule:
+        // Points earned expire after 30 days. Oldest earned points are redeemed first.
+        async getRewardPoints(customerPhone, currentTime = Date.now()) {
             const clean = cleanPhoneNumber(customerPhone);
             if (!clean) return 0;
+
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+            const computeFromSessions = (sessionsList) => {
+                const history = sessionsList
+                    .filter(s => s.status === 'paid' && (Number(s.pointsEarned) > 0 || Number(s.pointsRedeemed) > 0))
+                    .map(s => ({
+                        pointsEarned: Number(s.pointsEarned) || 0,
+                        pointsRedeemed: Number(s.pointsRedeemed) || 0,
+                        timestamp: Number(s.closedAt || s.createdAt || 0)
+                    }))
+                    .sort((a, b) => a.timestamp - b.timestamp);
+
+                const batches = [];
+                for (const entry of history) {
+                    if (entry.pointsEarned > 0) {
+                        batches.push({
+                            remaining: entry.pointsEarned,
+                            timestamp: entry.timestamp
+                        });
+                    }
+                    let toRedeem = entry.pointsRedeemed;
+                    if (toRedeem > 0) {
+                        for (let i = 0; i < batches.length && toRedeem > 0; i++) {
+                            if (batches[i].remaining <= toRedeem) {
+                                toRedeem -= batches[i].remaining;
+                                batches[i].remaining = 0;
+                            } else {
+                                batches[i].remaining -= toRedeem;
+                                toRedeem = 0;
+                            }
+                        }
+                    }
+                }
+
+                const cutoffTime = currentTime - THIRTY_DAYS_MS;
+                let activePoints = 0;
+                for (const b of batches) {
+                    if (b.remaining > 0 && b.timestamp >= cutoffTime) {
+                        activePoints += b.remaining;
+                    }
+                }
+                return Math.max(0, Math.round(activePoints));
+            };
 
             if (firebaseInitialized) {
                 try {
@@ -540,18 +585,9 @@ export const db = {
                         where('customerPhone', 'in', phoneVariants)
                     );
                     const snapshot = await getDocs(q);
-                    let totalEarned = 0;
-                    let totalRedeemed = 0;
-                    snapshot.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data.pointsEarned) {
-                            totalEarned += Number(data.pointsEarned) || 0;
-                        }
-                        if (data.pointsRedeemed) {
-                            totalRedeemed += Number(data.pointsRedeemed) || 0;
-                        }
-                    });
-                    return Math.max(0, Math.round(totalEarned - totalRedeemed));
+                    const sessionsList = [];
+                    snapshot.forEach(docSnap => sessionsList.push(docSnap.data()));
+                    return computeFromSessions(sessionsList);
                 } catch (err) {
                     console.warn("Could not calculate reward points from sessions (falling back to 0):", err);
                     return 0;
@@ -559,13 +595,7 @@ export const db = {
             } else {
                 const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
                 const paidSessions = sessions.filter(s => cleanPhoneNumber(s.customerPhone) === clean && s.status === 'paid');
-                let totalEarned = 0;
-                let totalRedeemed = 0;
-                paidSessions.forEach(s => {
-                    if (s.pointsEarned) totalEarned += Number(s.pointsEarned) || 0;
-                    if (s.pointsRedeemed) totalRedeemed += Number(s.pointsRedeemed) || 0;
-                });
-                return Math.max(0, Math.round(totalEarned - totalRedeemed));
+                return computeFromSessions(paidSessions);
             }
         },
 
@@ -598,10 +628,10 @@ export const db = {
         },
 
         // Calculate max redeemable reward points on current subtotal:
-        // Rule: Max 30% of bill OR Max ₹100, whichever is lower, capped by available balance
+        // Rule: Max 20% of bill OR Max ₹100, whichever is lower, capped by available balance
         calculateMaxRedeemable(subtotal, availablePoints) {
             if (!availablePoints || availablePoints <= 0 || !subtotal || subtotal <= 0) return 0;
-            const maxPercentAmount = Math.floor(subtotal * 0.30);
+            const maxPercentAmount = Math.floor(subtotal * 0.20);
             const maxAllowed = Math.min(100, maxPercentAmount);
             return Math.min(availablePoints, maxAllowed);
         },
