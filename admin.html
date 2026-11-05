@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard & POS | Chai Shotts</title>
     <script>
+        // Non-blocking error handling (avoids alert freezing Safari/iOS)
         window.addEventListener('error', function(e) {
-            alert("JS Error: " + e.message + "\nFile: " + e.filename + "\nLine: " + e.lineno);
+            console.error("JS Error:", e.message, e.filename, e.lineno);
         });
         window.addEventListener('unhandledrejection', function(e) {
-            alert("Unhandled Promise Rejection: " + e.reason);
+            console.error("Unhandled Promise Rejection:", e.reason);
         });
     </script>
     
@@ -762,6 +763,6 @@
     <div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; pointer-events: none;"></div>
 
     <!-- Application Script -->
-    <script type="module" src="js/admin.js?v=40"></script>
+    <script type="module" src="js/admin.js?v=41"></script>
 </body>
 </html>

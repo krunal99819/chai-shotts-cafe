@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=40';
+import db, { cleanPhoneNumber } from './db.js?v=41';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -847,11 +847,10 @@ function setupCheckoutActions() {
                 // 1. Process customer cumulative points in database
                 let updatedBalance = availablePoints;
                 if (selectedSession.customerPhone) {
-                    const netPointChange = pointsEarned - pointsToRedeem;
                     updatedBalance = await db.sessions.updateCustomerRewardPoints(
                         selectedSession.customerPhone, 
-                        netPointChange,
-                        `Table ${selectedSession.tableNumber} checkout`
+                        pointsEarned,
+                        pointsToRedeem
                     );
                 }
 

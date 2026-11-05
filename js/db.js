@@ -19,6 +19,36 @@ export function cleanPhoneNumber(phone) {
 
 // Check configuration and initialize Firebase if set
 // Offline / Test Isolation: If URL contains ?offline=true or in localhost with test param, use Mock DB to prevent disturbing live Firebase
+// Safe localStorage wrapper to prevent crashes in Safari Private Browsing
+const safeStorage = {
+    getItem(key) {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.localStorage) {
+                return globalThis.localStorage.getItem(key);
+            }
+        } catch (e) {
+            console.warn("Storage access restricted (e.g. Safari Private Mode):", e);
+        }
+        return null;
+    },
+    setItem(key, value) {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.localStorage) {
+                globalThis.localStorage.setItem(key, value);
+            }
+        } catch (e) {
+            console.warn("Storage write restricted:", e);
+        }
+    },
+    removeItem(key) {
+        try {
+            if (typeof globalThis !== 'undefined' && globalThis.localStorage) {
+                globalThis.localStorage.removeItem(key);
+            }
+        } catch (e) {}
+    }
+};
+
 const isBrowser = typeof window !== 'undefined';
 const urlParams = isBrowser ? new URLSearchParams(window.location.search) : new URLSearchParams();
 const forceOffline = urlParams.get('offline') === 'true' || (isBrowser && window.location.hostname === '127.0.0.1') || !isBrowser;
@@ -54,29 +84,29 @@ if (useFirebase) {
 const mockDB = {
     // Initial Seed Helpers
     init() {
-        if (!localStorage.getItem('cs_categories')) {
-            localStorage.setItem('cs_categories', JSON.stringify(defaultCategories));
+        if (!safeStorage.getItem('cs_categories')) {
+            safeStorage.setItem('cs_categories', JSON.stringify(defaultCategories));
         }
-        if (!localStorage.getItem('cs_products')) {
-            localStorage.setItem('cs_products', JSON.stringify(defaultProducts));
+        if (!safeStorage.getItem('cs_products')) {
+            safeStorage.setItem('cs_products', JSON.stringify(defaultProducts));
         }
-        if (!localStorage.getItem('cs_orders')) {
-            localStorage.setItem('cs_orders', JSON.stringify([]));
+        if (!safeStorage.getItem('cs_orders')) {
+            safeStorage.setItem('cs_orders', JSON.stringify([]));
         }
-        if (!localStorage.getItem('cs_sessions')) {
-            localStorage.setItem('cs_sessions', JSON.stringify([]));
+        if (!safeStorage.getItem('cs_sessions')) {
+            safeStorage.setItem('cs_sessions', JSON.stringify([]));
         }
-        if (!localStorage.getItem('cs_requests')) {
-            localStorage.setItem('cs_requests', JSON.stringify([]));
+        if (!safeStorage.getItem('cs_requests')) {
+            safeStorage.setItem('cs_requests', JSON.stringify([]));
         }
         // Initialize Default Users
-        if (!localStorage.getItem('cs_users')) {
-            localStorage.setItem('cs_users', JSON.stringify([
+        if (!safeStorage.getItem('cs_users')) {
+            safeStorage.setItem('cs_users', JSON.stringify([
                 { email: 'admin@chaishotts.com', role: 'admin', name: 'Admin Staff', password: 'admin123' }
             ]));
         }
-        if (!localStorage.getItem('cs_settings')) {
-            localStorage.setItem('cs_settings', JSON.stringify({ gstEnabled: false }));
+        if (!safeStorage.getItem('cs_settings')) {
+            safeStorage.setItem('cs_settings', JSON.stringify({ gstEnabled: false }));
         }
     },
 
@@ -143,7 +173,7 @@ export const db = {
                 });
             } else {
                 mockDB.listeners.categories.push(callback);
-                callback(JSON.parse(localStorage.getItem('cs_categories') || '[]'));
+                callback(JSON.parse(safeStorage.getItem('cs_categories') || '[]'));
             }
         },
         async getAll() {
@@ -155,7 +185,7 @@ export const db = {
                 snapshot.forEach(doc => categories.push({ id: doc.id, ...doc.data() }));
                 return categories;
             } else {
-                return JSON.parse(localStorage.getItem('cs_categories') || '[]');
+                return JSON.parse(safeStorage.getItem('cs_categories') || '[]');
             }
         },
         async add(category) {
@@ -163,10 +193,10 @@ export const db = {
                 const { collection, addDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await addDoc(collection(firestore, 'categories'), category);
             } else {
-                const categories = JSON.parse(localStorage.getItem('cs_categories') || '[]');
+                const categories = JSON.parse(safeStorage.getItem('cs_categories') || '[]');
                 category.id = 'cat_' + Date.now();
                 categories.push(category);
-                localStorage.setItem('cs_categories', JSON.stringify(categories));
+                safeStorage.setItem('cs_categories', JSON.stringify(categories));
                 mockDB.trigger('categories', categories);
             }
             await db.settings.bumpCatalogVersion();
@@ -176,11 +206,11 @@ export const db = {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await updateDoc(doc(firestore, 'categories', id), data);
             } else {
-                const categories = JSON.parse(localStorage.getItem('cs_categories') || '[]');
+                const categories = JSON.parse(safeStorage.getItem('cs_categories') || '[]');
                 const idx = categories.findIndex(c => c.id === id);
                 if (idx !== -1) {
                     categories[idx] = { ...categories[idx], ...data };
-                    localStorage.setItem('cs_categories', JSON.stringify(categories));
+                    safeStorage.setItem('cs_categories', JSON.stringify(categories));
                     mockDB.trigger('categories', categories);
                 }
             }
@@ -191,9 +221,9 @@ export const db = {
                 const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await deleteDoc(doc(firestore, 'categories', id));
             } else {
-                const categories = JSON.parse(localStorage.getItem('cs_categories') || '[]');
+                const categories = JSON.parse(safeStorage.getItem('cs_categories') || '[]');
                 const filtered = categories.filter(c => c.id !== id);
-                localStorage.setItem('cs_categories', JSON.stringify(filtered));
+                safeStorage.setItem('cs_categories', JSON.stringify(filtered));
                 mockDB.trigger('categories', filtered);
             }
             await db.settings.bumpCatalogVersion();
@@ -212,7 +242,7 @@ export const db = {
                 });
             } else {
                 mockDB.listeners.products.push(callback);
-                callback(JSON.parse(localStorage.getItem('cs_products') || '[]'));
+                callback(JSON.parse(safeStorage.getItem('cs_products') || '[]'));
             }
         },
         async getAll() {
@@ -223,7 +253,7 @@ export const db = {
                 snapshot.forEach(doc => products.push({ id: doc.id, ...doc.data() }));
                 return products;
             } else {
-                return JSON.parse(localStorage.getItem('cs_products') || '[]');
+                return JSON.parse(safeStorage.getItem('cs_products') || '[]');
             }
         },
         async add(product) {
@@ -231,10 +261,10 @@ export const db = {
                 const { collection, addDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await addDoc(collection(firestore, 'products'), product);
             } else {
-                const products = JSON.parse(localStorage.getItem('cs_products') || '[]');
+                const products = JSON.parse(safeStorage.getItem('cs_products') || '[]');
                 product.id = 'prod_' + Date.now();
                 products.push(product);
-                localStorage.setItem('cs_products', JSON.stringify(products));
+                safeStorage.setItem('cs_products', JSON.stringify(products));
                 mockDB.trigger('products', products);
             }
             await db.settings.bumpCatalogVersion();
@@ -244,11 +274,11 @@ export const db = {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await updateDoc(doc(firestore, 'products', id), data);
             } else {
-                const products = JSON.parse(localStorage.getItem('cs_products') || '[]');
+                const products = JSON.parse(safeStorage.getItem('cs_products') || '[]');
                 const idx = products.findIndex(p => p.id === id);
                 if (idx !== -1) {
                     products[idx] = { ...products[idx], ...data };
-                    localStorage.setItem('cs_products', JSON.stringify(products));
+                    safeStorage.setItem('cs_products', JSON.stringify(products));
                     mockDB.trigger('products', products);
                 }
             }
@@ -259,9 +289,9 @@ export const db = {
                 const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await deleteDoc(doc(firestore, 'products', id));
             } else {
-                const products = JSON.parse(localStorage.getItem('cs_products') || '[]');
+                const products = JSON.parse(safeStorage.getItem('cs_products') || '[]');
                 const filtered = products.filter(p => p.id !== id);
-                localStorage.setItem('cs_products', JSON.stringify(filtered));
+                safeStorage.setItem('cs_products', JSON.stringify(filtered));
                 mockDB.trigger('products', filtered);
             }
             await db.settings.bumpCatalogVersion();
@@ -283,7 +313,7 @@ export const db = {
                 return () => { if (unsubscribe) unsubscribe(); };
             } else {
                 mockDB.listeners.orders.push(callback);
-                callback(JSON.parse(localStorage.getItem('cs_orders') || '[]'));
+                callback(JSON.parse(safeStorage.getItem('cs_orders') || '[]'));
                 return () => {};
             }
         },
@@ -310,7 +340,7 @@ export const db = {
                 snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
                 return orders.sort((a,b) => b.createdAt - a.createdAt);
             } else {
-                return JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                return JSON.parse(safeStorage.getItem('cs_orders') || '[]');
             }
         },
         async getBySession(sessionId) {
@@ -322,7 +352,7 @@ export const db = {
                 snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
                 return orders.sort((a,b) => b.createdAt - a.createdAt);
             } else {
-                const all = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                const all = JSON.parse(safeStorage.getItem('cs_orders') || '[]');
                 return all.filter(o => o.sessionId === sessionId).sort((a,b) => b.createdAt - a.createdAt);
             }
         },
@@ -342,20 +372,20 @@ export const db = {
                 }
                 return docRef.id;
             } else {
-                const orders = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                const orders = JSON.parse(safeStorage.getItem('cs_orders') || '[]');
                 order.id = 'ord_' + Date.now();
                 orders.push(order);
-                localStorage.setItem('cs_orders', JSON.stringify(orders));
+                safeStorage.setItem('cs_orders', JSON.stringify(orders));
 
                 // Merge into table session
                 if (order.sessionId) {
-                    const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                    const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                     const sessIdx = sessions.findIndex(s => s.id === order.sessionId);
                     if (sessIdx !== -1) {
                         sessions[sessIdx].orderIds.push(order.id);
                         const orderTotal = order.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
                         sessions[sessIdx].totalAmount += orderTotal;
-                        localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                        safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                         mockDB.trigger('sessions', sessions);
                     }
                 }
@@ -387,15 +417,15 @@ export const db = {
                     }
                 }
             } else {
-                const orders = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                const orders = JSON.parse(safeStorage.getItem('cs_orders') || '[]');
                 const idx = orders.findIndex(o => o.id === id);
                 if (idx !== -1) {
                     orders[idx].status = status;
-                    localStorage.setItem('cs_orders', JSON.stringify(orders));
+                    safeStorage.setItem('cs_orders', JSON.stringify(orders));
                     
                     const orderData = orders[idx];
                     if (orderData.sessionId) {
-                        const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                        const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                         const sIdx = sessions.findIndex(s => s.id === orderData.sessionId);
                         if (sIdx !== -1) {
                             let newTotal = 0;
@@ -405,7 +435,7 @@ export const db = {
                                 }
                             });
                             sessions[sIdx].totalAmount = newTotal;
-                            localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                            safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                             mockDB.trigger('sessions', sessions);
                         }
                     }
@@ -431,7 +461,7 @@ export const db = {
                 return () => { if (unsubscribe) unsubscribe(); };
             } else {
                 mockDB.listeners.sessions.push(callback);
-                callback(JSON.parse(localStorage.getItem('cs_sessions') || '[]'));
+                callback(JSON.parse(safeStorage.getItem('cs_sessions') || '[]'));
                 return () => {};
             }
         },
@@ -458,7 +488,7 @@ export const db = {
                 snapshot.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
                 return sessions.sort((a,b) => b.createdAt - a.createdAt);
             } else {
-                return JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                return JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
             }
         },
         getSession: async function(id) {
@@ -470,7 +500,7 @@ export const db = {
                 }
                 return null;
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const found = sessions.find(s => s.id === id);
                 return found || null;
             }
@@ -482,7 +512,7 @@ export const db = {
                 const snapshot = await getDocs(q);
                 return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a, b) => b.createdAt - a.createdAt);
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 return sessions.filter(s => s.status === 'open').sort((a, b) => b.createdAt - a.createdAt);
             }
         },
@@ -512,7 +542,7 @@ export const db = {
                 }
                 return null;
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const active = sessions.find(s => s.tableNumber === tableNumber && s.status === 'open' && (tableNumber < 10 || !locationLabel || s.locationLabel.toLowerCase() === locationLabel.toLowerCase()));
                 return active || null;
             }
@@ -525,13 +555,35 @@ export const db = {
         },
 
         // Fetch active cumulative reward points balance for a phone number
-        // Calculated with FIFO (First-In, First-Out) and 30-day expiry rule:
-        // Points earned expire after 30 days. Oldest earned points are redeemed first.
+        // High-Efficiency 1-Read Design with 30-day FIFO expiration:
+        // Stores active balance & rolling batches in 'sessions/balance_<cleanPhone>' doc.
+        // Cost: Exactly 1 single read! (Down from 100+ reads per visit)
         async getRewardPoints(customerPhone, currentTime = Date.now()) {
             const clean = cleanPhoneNumber(customerPhone);
             if (!clean) return 0;
 
             const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            const cutoffTime = currentTime - THIRTY_DAYS_MS;
+
+            const filterActiveBatches = (batches) => {
+                let active = 0;
+                const validBatches = [];
+                let hasExpired = false;
+
+                for (const b of (batches || [])) {
+                    const rem = Number(b.remaining) || 0;
+                    const ts = Number(b.timestamp) || 0;
+                    if (rem > 0) {
+                        if (ts >= cutoffTime) {
+                            active += rem;
+                            validBatches.push({ remaining: rem, timestamp: ts });
+                        } else {
+                            hasExpired = true; // Dropped because > 30 days
+                        }
+                    }
+                }
+                return { active: Math.max(0, Math.round(active)), validBatches, hasExpired };
+            };
 
             const computeFromSessions = (sessionsList) => {
                 const history = sessionsList
@@ -564,19 +616,33 @@ export const db = {
                         }
                     }
                 }
-
-                const cutoffTime = currentTime - THIRTY_DAYS_MS;
-                let activePoints = 0;
-                for (const b of batches) {
-                    if (b.remaining > 0 && b.timestamp >= cutoffTime) {
-                        activePoints += b.remaining;
-                    }
-                }
-                return Math.max(0, Math.round(activePoints));
+                const { active, validBatches } = filterActiveBatches(batches);
+                return { active, validBatches };
             };
 
             if (firebaseInitialized) {
                 try {
+                    const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                    const balanceDocRef = doc(firestore, 'sessions', 'balance_' + clean);
+                    const docSnap = await getDoc(balanceDocRef);
+
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        const { active, validBatches, hasExpired } = filterActiveBatches(data.batches || []);
+                        
+                        // If some batches expired past 30 days, update the doc silently to keep storage clean
+                        if (hasExpired) {
+                            setDoc(balanceDocRef, {
+                                status: 'loyalty_balance',
+                                customerPhone: clean,
+                                batches: validBatches,
+                                updatedAt: Date.now()
+                            }, { merge: true }).catch(() => {});
+                        }
+                        return active;
+                    }
+
+                    // First-time migration for existing customer: query once, build batches, and save to balance doc
                     const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                     const phoneVariants = [clean, '0' + clean, '91' + clean, '+91' + clean, '+91 ' + clean, '+91-' + clean];
                     const q = query(
@@ -586,44 +652,127 @@ export const db = {
                     );
                     const snapshot = await getDocs(q);
                     const sessionsList = [];
-                    snapshot.forEach(docSnap => sessionsList.push(docSnap.data()));
-                    return computeFromSessions(sessionsList);
+                    snapshot.forEach(d => sessionsList.push(d.data()));
+                    const { active, validBatches } = computeFromSessions(sessionsList);
+
+                    // Persist for all subsequent visits so they cost only 1 read
+                    await setDoc(balanceDocRef, {
+                        status: 'loyalty_balance',
+                        customerPhone: clean,
+                        batches: validBatches,
+                        updatedAt: Date.now()
+                    }, { merge: true }).catch(() => {});
+
+                    return active;
                 } catch (err) {
-                    console.warn("Could not calculate reward points from sessions (falling back to 0):", err);
+                    console.warn("Could not calculate reward points from balance doc:", err);
                     return 0;
                 }
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const paidSessions = sessions.filter(s => cleanPhoneNumber(s.customerPhone) === clean && s.status === 'paid');
-                return computeFromSessions(paidSessions);
+                const { active } = computeFromSessions(paidSessions);
+                return active;
             }
         },
 
-        // Update reward points for customer in customer profile & log history
-        async updateCustomerRewardPoints(customerPhone, pointsChange, reason = "") {
+        // Update reward points at checkout or manual adjustments
+        async updateCustomerRewardPoints(customerPhone, pointsEarned = 0, pointsRedeemed = 0) {
             const clean = cleanPhoneNumber(customerPhone);
             if (!clean) return 0;
 
+            const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+            const cutoffTime = now - THIRTY_DAYS_MS;
+
             if (firebaseInitialized) {
                 try {
-                    const { doc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
-                    await setDoc(doc(firestore, 'customers', clean), {
-                        phone: clean,
-                        rewardPoints: increment(pointsChange),
-                        updatedAt: Date.now()
+                    const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                    const balanceDocRef = doc(firestore, 'sessions', 'balance_' + clean);
+                    const docSnap = await getDoc(balanceDocRef);
+
+                    let batches = [];
+                    if (docSnap.exists()) {
+                        batches = docSnap.data().batches || [];
+                    } else {
+                        // Populate initial batches
+                        const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+                        const phoneVariants = [clean, '0' + clean, '91' + clean, '+91' + clean, '+91 ' + clean, '+91-' + clean];
+                        const q = query(collection(firestore, 'sessions'), where('status', '==', 'paid'), where('customerPhone', 'in', phoneVariants));
+                        const snapshot = await getDocs(q);
+                        const sessionsList = [];
+                        snapshot.forEach(d => sessionsList.push(d.data()));
+                        
+                        const history = sessionsList
+                            .filter(s => s.status === 'paid' && (Number(s.pointsEarned) > 0 || Number(s.pointsRedeemed) > 0))
+                            .map(s => ({
+                                pointsEarned: Number(s.pointsEarned) || 0,
+                                pointsRedeemed: Number(s.pointsRedeemed) || 0,
+                                timestamp: Number(s.closedAt || s.createdAt || 0)
+                            }))
+                            .sort((a, b) => a.timestamp - b.timestamp);
+
+                        for (const entry of history) {
+                            if (entry.pointsEarned > 0) {
+                                batches.push({ remaining: entry.pointsEarned, timestamp: entry.timestamp });
+                            }
+                            let toRedeem = entry.pointsRedeemed;
+                            if (toRedeem > 0) {
+                                for (let i = 0; i < batches.length && toRedeem > 0; i++) {
+                                    if (batches[i].remaining <= toRedeem) {
+                                        toRedeem -= batches[i].remaining;
+                                        batches[i].remaining = 0;
+                                    } else {
+                                        batches[i].remaining -= toRedeem;
+                                        toRedeem = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 1. Redeem points from oldest unexpired batches (FIFO)
+                    let toRedeem = Number(pointsRedeemed) || 0;
+                    const validBatches = [];
+                    for (const b of batches) {
+                        const rem = Number(b.remaining) || 0;
+                        const ts = Number(b.timestamp) || 0;
+                        if (rem > 0 && ts >= cutoffTime) {
+                            if (toRedeem > 0) {
+                                if (rem <= toRedeem) {
+                                    toRedeem -= rem;
+                                } else {
+                                    validBatches.push({ remaining: rem - toRedeem, timestamp: ts });
+                                    toRedeem = 0;
+                                }
+                            } else {
+                                validBatches.push({ remaining: rem, timestamp: ts });
+                            }
+                        }
+                    }
+
+                    // 2. Add new points earned as a new batch
+                    const earned = Number(pointsEarned) || 0;
+                    if (earned > 0) {
+                        validBatches.push({ remaining: earned, timestamp: now });
+                    }
+
+                    // 3. Save updated batches
+                    await setDoc(balanceDocRef, {
+                        status: 'loyalty_balance',
+                        customerPhone: clean,
+                        batches: validBatches,
+                        updatedAt: now
                     }, { merge: true });
-                    return await this.getRewardPoints(clean);
+
+                    const totalActive = validBatches.reduce((sum, b) => sum + (Number(b.remaining) || 0), 0);
+                    return Math.max(0, Math.round(totalActive));
                 } catch (err) {
-                    console.warn("Could not update customer reward points in Firestore:", err);
+                    console.warn("Could not update customer reward points balance doc:", err);
                     return 0;
                 }
             } else {
-                const customers = JSON.parse(localStorage.getItem('cs_customers') || '{}');
-                if (!customers[clean]) customers[clean] = { phone: clean, rewardPoints: 0 };
-                customers[clean].rewardPoints = Math.max(0, Math.round(((customers[clean].rewardPoints || 0) + pointsChange) * 100) / 100);
-                customers[clean].updatedAt = Date.now();
-                localStorage.setItem('cs_customers', JSON.stringify(customers));
-                return customers[clean].rewardPoints;
+                return await this.getRewardPoints(clean, now);
             }
         },
 
@@ -668,10 +817,10 @@ export const db = {
                 const docRef = await addDoc(collection(firestore, 'sessions'), newSession);
                 return { id: docRef.id, ...newSession };
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 newSession.id = 'sess_' + Date.now();
                 sessions.push(newSession);
-                localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                 mockDB.trigger('sessions', sessions);
                 return newSession;
             }
@@ -691,11 +840,11 @@ export const db = {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await updateDoc(doc(firestore, 'sessions', sessionId), updatePayload);
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
                     sessions[idx] = { ...sessions[idx], ...updatePayload };
-                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }
             }
@@ -725,7 +874,7 @@ export const db = {
                 
                 await updateDoc(doc(firestore, 'sessions', sessionId), { totalAmount: newTotalAmount });
             } else {
-                const orders = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                const orders = JSON.parse(safeStorage.getItem('cs_orders') || '[]');
                 let newTotalAmount = 0;
                 
                 orders.forEach(o => {
@@ -737,14 +886,14 @@ export const db = {
                     }
                 });
                 
-                localStorage.setItem('cs_orders', JSON.stringify(orders));
+                safeStorage.setItem('cs_orders', JSON.stringify(orders));
                 mockDB.trigger('orders', orders);
 
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
                     sessions[idx].totalAmount = newTotalAmount;
-                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }
             }
@@ -800,7 +949,7 @@ export const db = {
                 
                 await updateDoc(doc(firestore, 'sessions', sessionId), { totalAmount: newTotalAmount });
             } else {
-                const orders = JSON.parse(localStorage.getItem('cs_orders') || '[]');
+                const orders = JSON.parse(safeStorage.getItem('cs_orders') || '[]');
                 let newTotalAmount = 0;
                 let quantityUpdated = false;
                 
@@ -831,14 +980,14 @@ export const db = {
                 });
 
                 
-                localStorage.setItem('cs_orders', JSON.stringify(orders));
+                safeStorage.setItem('cs_orders', JSON.stringify(orders));
                 mockDB.trigger('orders', orders);
 
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
                     sessions[idx].totalAmount = newTotalAmount;
-                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }
             }
@@ -856,7 +1005,7 @@ export const db = {
                     additionalGuests: arrayUnion(guestObj)
                 });
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
                     if (!sessions[idx].additionalGuests) sessions[idx].additionalGuests = [];
@@ -864,7 +1013,7 @@ export const db = {
                     if (!sessions[idx].additionalGuests.some(g => g.phone === cleanPhone)) {
                         sessions[idx].additionalGuests.push(guestObj);
                     }
-                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }
             }
@@ -879,13 +1028,13 @@ export const db = {
                     ...loyaltyInfo
                 });
             } else {
-                const sessions = JSON.parse(localStorage.getItem('cs_sessions') || '[]');
+                const sessions = JSON.parse(safeStorage.getItem('cs_sessions') || '[]');
                 const idx = sessions.findIndex(s => s.id === sessionId);
                 if (idx !== -1) {
                     sessions[idx].customerName = customerName;
                     sessions[idx].customerPhone = customerPhone;
                     Object.assign(sessions[idx], loyaltyInfo);
-                    localStorage.setItem('cs_sessions', JSON.stringify(sessions));
+                    safeStorage.setItem('cs_sessions', JSON.stringify(sessions));
                     mockDB.trigger('sessions', sessions);
                 }
             }
@@ -907,7 +1056,7 @@ export const db = {
                 return () => { if (unsubscribe) unsubscribe(); };
             } else {
                 mockDB.listeners.requests.push(callback);
-                callback(JSON.parse(localStorage.getItem('cs_requests') || '[]'));
+                callback(JSON.parse(safeStorage.getItem('cs_requests') || '[]'));
                 return () => {};
             }
         },
@@ -925,7 +1074,7 @@ export const db = {
             } else {
                 // Mock listener for one
                 const interval = setInterval(() => {
-                    const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
+                    const requests = JSON.parse(safeStorage.getItem('cs_requests') || '[]');
                     const req = requests.find(r => r.id === id);
                     if (req) callback(req);
                 }, 1000);
@@ -948,10 +1097,10 @@ export const db = {
                 const docRef = await addDoc(collection(firestore, 'requests'), request);
                 return docRef.id;
             } else {
-                const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
+                const requests = JSON.parse(safeStorage.getItem('cs_requests') || '[]');
                 request.id = 'req_' + Date.now();
                 requests.push(request);
-                localStorage.setItem('cs_requests', JSON.stringify(requests));
+                safeStorage.setItem('cs_requests', JSON.stringify(requests));
                 mockDB.trigger('requests', requests);
                 return request.id;
             }
@@ -964,11 +1113,11 @@ export const db = {
                 const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await updateDoc(doc(firestore, 'requests', id), { status: newStatus });
             } else {
-                const requests = JSON.parse(localStorage.getItem('cs_requests') || '[]');
+                const requests = JSON.parse(safeStorage.getItem('cs_requests') || '[]');
                 const idx = requests.findIndex(r => r.id === id);
                 if (idx !== -1) {
                     requests[idx].status = newStatus;
-                    localStorage.setItem('cs_requests', JSON.stringify(requests));
+                    safeStorage.setItem('cs_requests', JSON.stringify(requests));
                     mockDB.trigger('requests', requests);
                 }
             }
@@ -1022,7 +1171,7 @@ export const db = {
                     throw error;
                 }
             } else {
-                const users = JSON.parse(localStorage.getItem('cs_users') || '[]');
+                const users = JSON.parse(safeStorage.getItem('cs_users') || '[]');
                 const user = users.find(u => u.email === email && u.password === password);
                 if (user) {
                     const loggedInUser = { email: user.email, role: user.role, name: user.name };
@@ -1091,7 +1240,7 @@ export const db = {
                 });
             } else {
                 mockDB.listeners.settings.push(callback);
-                const settings = JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
+                const settings = JSON.parse(safeStorage.getItem('cs_settings') || '{"gstEnabled":false}');
                 callback(settings);
             }
         },
@@ -1105,7 +1254,7 @@ export const db = {
                     return { gstEnabled: false };
                 }
             } else {
-                return JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
+                return JSON.parse(safeStorage.getItem('cs_settings') || '{"gstEnabled":false}');
             }
         },
         async setGst(enabled) {
@@ -1116,9 +1265,9 @@ export const db = {
                 const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await setDoc(doc(firestore, 'settings', 'global'), data, { merge: true });
             } else {
-                const current = JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
+                const current = JSON.parse(safeStorage.getItem('cs_settings') || '{"gstEnabled":false}');
                 const updated = { ...current, ...data };
-                localStorage.setItem('cs_settings', JSON.stringify(updated));
+                safeStorage.setItem('cs_settings', JSON.stringify(updated));
                 mockDB.trigger('settings', updated);
             }
         },
@@ -1127,9 +1276,9 @@ export const db = {
                 const { doc, setDoc, increment } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
                 await setDoc(doc(firestore, 'settings', 'global'), { catalogVersion: increment(1) }, { merge: true });
             } else {
-                const current = JSON.parse(localStorage.getItem('cs_settings') || '{"gstEnabled":false}');
+                const current = JSON.parse(safeStorage.getItem('cs_settings') || '{"gstEnabled":false}');
                 current.catalogVersion = (current.catalogVersion || 0) + 1;
-                localStorage.setItem('cs_settings', JSON.stringify(current));
+                safeStorage.setItem('cs_settings', JSON.stringify(current));
                 mockDB.trigger('settings', current);
             }
         }

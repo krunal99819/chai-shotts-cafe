@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber } from './db.js?v=40';
+import db, { cleanPhoneNumber } from './db.js?v=41';
 import soundEffects from './audio.js';
 
 // State Variables
@@ -571,6 +571,9 @@ function handleSessionUpdate(session) {
     }
 }
 
+let cachedRewardPhone = null;
+let cachedRewardPoints = null;
+
 async function renderLoyaltyCard(session) {
     const container = document.getElementById('loyaltyCardContainer');
     const statusText = document.getElementById('loyaltyStatusText');
@@ -579,15 +582,26 @@ async function renderLoyaltyCard(session) {
     
     if (!session || !session.customerPhone) {
         container.style.display = 'none';
+        cachedRewardPhone = null;
+        cachedRewardPoints = null;
         return;
     }
     
     container.style.display = 'block';
     
-    // Fetch live cumulative points balance
+    const cleanPhone = cleanPhoneNumber(session.customerPhone);
+    
+    // If already fetched for this session/phone, reuse without re-reading Firestore!
+    if (cachedRewardPhone === cleanPhone && cachedRewardPoints !== null) {
+        statusText.innerText = `${cachedRewardPoints} Points (₹${cachedRewardPoints} Value)`;
+        return;
+    }
+    
     let points = session.rewardPointsAvailable || 0;
     try {
         points = await db.sessions.getRewardPoints(session.customerPhone);
+        cachedRewardPhone = cleanPhone;
+        cachedRewardPoints = points;
     } catch (e) {
         console.error("Failed to load points:", e);
     }
