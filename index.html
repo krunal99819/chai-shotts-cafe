@@ -121,7 +121,10 @@
 
         <!-- Menu Section (Grouped by Category) -->
         <div id="menuContainer" class="menu-section">
-            <!-- Dynamically loaded product list -->
+            <div id="menuLoadingSpinner" style="text-align: center; padding: 48px 20px; color: var(--color-primary-deep);">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size: 2.2rem; color: var(--color-accent-gold); margin-bottom: 12px; display: block;"></i>
+                <span style="font-size: 0.95rem; font-weight: 600;">Loading Menu...</span>
+            </div>
         </div>
 
         <!-- Customer Running Item Bill (Directly at bottom of menu) -->
@@ -436,6 +439,6 @@
     </div>
 
     <!-- Trigger Rebuild -->
-    <script type="module" src="js/customer.js?v=41"></script>
+    <script type="module" src="js/customer.js?v=42"></script>
 </body>
 </html>

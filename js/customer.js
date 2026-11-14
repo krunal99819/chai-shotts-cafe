@@ -1,5 +1,6 @@
-import db, { cleanPhoneNumber } from './db.js?v=41';
+import db, { cleanPhoneNumber, safeStorage } from './db.js?v=42';
 import soundEffects from './audio.js';
+import { defaultCategories, defaultProducts } from './menu-data.js';
 
 // State Variables
 let tableNumber = null;
@@ -129,7 +130,7 @@ if (document.readyState === 'loading') {
 
 async function initApp() {
     // Check if there is an active session stored in LocalStorage for this device/browser
-    const savedSessionId = localStorage.getItem('cs_active_session_id');
+    const savedSessionId = safeStorage.getItem('cs_active_session_id');
     let sessionRestored = false;
     
     // Parse Table Number from URL
@@ -142,7 +143,7 @@ async function initApp() {
             
             // If scanning a NEW table, ignore the old saved session
             if (tableParam && savedSession && savedSession.tableNumber !== parseInt(tableParam)) {
-                localStorage.removeItem('cs_active_session_id');
+                safeStorage.removeItem('cs_active_session_id');
             } else if (savedSession && savedSession.status === 'open') {
                 activeSession = savedSession;
                 tableNumber = savedSession.tableNumber;
@@ -169,11 +170,11 @@ async function initApp() {
                 
                 sessionRestored = true;
             } else {
-                localStorage.removeItem('cs_active_session_id');
+                safeStorage.removeItem('cs_active_session_id');
             }
         } catch (e) {
             console.error("Error restoring saved session:", e);
-            localStorage.removeItem('cs_active_session_id');
+            safeStorage.removeItem('cs_active_session_id');
         }
     }
     
@@ -201,31 +202,53 @@ async function initApp() {
         }
     }
     
-    // 3. Load Menu Data (Categories & Products) - EXTREME CACHING TO 1 READ
+    // 3. Load Menu Data (Categories & Products) - EXTREME CACHING TO 1 READ WITH ZERO-FAIL FALLBACK
     try {
         // Fetch only settings to check version (1 read total)
-        const settings = await db.settings.getAll();
+        const settings = await db.settings.getAll().catch(e => {
+            console.warn("Could not fetch remote settings, falling back to local defaults:", e);
+            return { catalogVersion: 1, gstEnabled: false };
+        });
         globalSettings = settings || {};
         gstEnabled = globalSettings.gstEnabled || false;
         
         const remoteVersion = settings.catalogVersion || 1;
-        const localVersion = parseInt(localStorage.getItem('cs_catalog_version') || '0');
-        const cachedCategories = localStorage.getItem('cs_cached_categories');
-        const cachedProducts = localStorage.getItem('cs_cached_products');
+        const localVersion = parseInt(safeStorage.getItem('cs_catalog_version') || '0');
+        const cachedCategories = safeStorage.getItem('cs_cached_categories');
+        const cachedProducts = safeStorage.getItem('cs_cached_products');
         
         if (remoteVersion === localVersion && cachedCategories && cachedProducts) {
             // CACHE HIT: 0 additional reads!
-            loadCategories(JSON.parse(cachedCategories));
-            loadProducts(JSON.parse(cachedProducts));
+            try {
+                loadCategories(JSON.parse(cachedCategories));
+                loadProducts(JSON.parse(cachedProducts));
+            } catch (parseErr) {
+                console.error("Error parsing cached catalog:", parseErr);
+                loadCategories(defaultCategories);
+                loadProducts(defaultProducts);
+            }
         } else {
             // CACHE MISS or VERSION UPDATED: Fetch from DB (~45 reads)
-            const categories = await db.categories.getAll();
-            const products = await db.products.getAll();
+            let categories = [];
+            let products = [];
+            try {
+                categories = await db.categories.getAll();
+                products = await db.products.getAll();
+            } catch (fetchErr) {
+                console.warn("Failed to fetch fresh catalog from DB, falling back to cache or default menu-data:", fetchErr);
+            }
             
-            // Save to LocalStorage for next time
-            localStorage.setItem('cs_cached_categories', JSON.stringify(categories));
-            localStorage.setItem('cs_cached_products', JSON.stringify(products));
-            localStorage.setItem('cs_catalog_version', remoteVersion.toString());
+            if (!categories || categories.length === 0) {
+                categories = cachedCategories ? JSON.parse(cachedCategories) : defaultCategories;
+            }
+            if (!products || products.length === 0) {
+                products = cachedProducts ? JSON.parse(cachedProducts) : defaultProducts;
+            }
+            
+            // Save to safeStorage for next time
+            safeStorage.setItem('cs_cached_categories', JSON.stringify(categories));
+            safeStorage.setItem('cs_cached_products', JSON.stringify(products));
+            safeStorage.setItem('cs_catalog_version', remoteVersion.toString());
             
             loadCategories(categories);
             loadProducts(products);
@@ -240,7 +263,9 @@ async function initApp() {
             syncRunningBill();
         }
     } catch (err) {
-        console.error("Failed to load catalog/settings", err);
+        console.error("Critical failure during catalog load, deploying emergency default menu:", err);
+        loadCategories(defaultCategories);
+        loadProducts(defaultProducts);
     }
 
     // 4. Setup Event Listeners
@@ -438,7 +463,7 @@ async function handleCreateSession() {
         if (activeLocationSess) {
             if (activeLocationSess.customerName.toLowerCase() === name.toLowerCase()) {
                 activeSession = activeLocationSess;
-                localStorage.setItem('cs_active_session_id', activeLocationSess.id);
+                safeStorage.setItem('cs_active_session_id', activeLocationSess.id);
                 elements.customerInfoModal.classList.remove('open');
                 listenToSessionChanges(activeLocationSess.id);
                 syncRunningBill();
@@ -472,7 +497,7 @@ async function handleCreateSession() {
                 }).then(async (approved) => {
                     if (approved) {
                         activeSession = activeLocationSess;
-                        localStorage.setItem('cs_active_session_id', activeLocationSess.id);
+                        safeStorage.setItem('cs_active_session_id', activeLocationSess.id);
                         elements.customerInfoModal.classList.remove('open');
                         listenToSessionChanges(activeLocationSess.id);
                         syncRunningBill();
@@ -503,7 +528,7 @@ async function handleCreateSession() {
 
         const session = await db.sessions.create(localTableNum, name, cleanedPhone, locationLabel, zone);
         activeSession = session;
-        localStorage.setItem('cs_active_session_id', session.id);
+        safeStorage.setItem('cs_active_session_id', session.id);
         elements.customerInfoModal.classList.remove('open');
         listenToSessionChanges(session.id);
         
@@ -539,7 +564,7 @@ function handleSessionUpdate(session) {
     
     // If table session is marked paid/closed, close it out locally
     if (session.status === 'paid') {
-        localStorage.removeItem('cs_active_session_id');
+        safeStorage.removeItem('cs_active_session_id');
         elements.paymentModal.classList.remove('open');
         elements.billOptionsModal.classList.remove('open');
         

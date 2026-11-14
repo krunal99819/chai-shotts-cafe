@@ -5,6 +5,8 @@ import { defaultCategories, defaultProducts } from './menu-data.js';
 let app, auth, firestore;
 let firebaseInitialized = false;
 
+export { safeStorage };
+
 export function cleanPhoneNumber(phone) {
     if (!phone) return "";
     let cleaned = phone.replace(/\D/g, '');
@@ -54,21 +56,33 @@ const urlParams = isBrowser ? new URLSearchParams(window.location.search) : new 
 const forceOffline = urlParams.get('offline') === 'true' || (isBrowser && window.location.hostname === '127.0.0.1') || !isBrowser;
 const useFirebase = isFirebaseConfigured() && !forceOffline;
 
-if (useFirebase) {
-    try {
-        // Dynamic import or loading via script is possible, but since we are in ES modules:
-        // We import statically from the CDN
+// Safari-safe Firebase loader: race CDN imports against a 10-second timeout
+// so a slow/hanging CDN never produces a blank page.
+const FIREBASE_LOAD_TIMEOUT_MS = 10000;
+
+async function loadFirebaseWithTimeout() {
+    const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Firebase CDN load timed out after 10s')), FIREBASE_LOAD_TIMEOUT_MS)
+    );
+    const load = (async () => {
         const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js");
         const { getFirestore } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
         const { getAuth } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js");
+        return { initializeApp, getFirestore, getAuth };
+    })();
+    return Promise.race([load, timeout]);
+}
 
+if (useFirebase) {
+    try {
+        const { initializeApp, getFirestore, getAuth } = await loadFirebaseWithTimeout();
         app = initializeApp(firebaseConfig);
         firestore = getFirestore(app);
         auth = getAuth(app);
         firebaseInitialized = true;
         console.log("Firebase initialized successfully.");
-        // Seed default products and categories if Firestore is empty
-        seedFirestoreIfNeeded();
+        // Note: Seeding is only needed during initial db setup, disabled in production to eliminate unnecessary reads
+        // seedFirestoreIfNeeded();
     } catch (error) {
         console.error("Failed to initialize Firebase, falling back to LocalStorage mock database.", error);
         firebaseInitialized = false;
@@ -302,8 +316,9 @@ export const db = {
         listen(callback) {
             if (firebaseInitialized) {
                 let unsubscribe = null;
-                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
-                    const q = query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(250));
+                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, where, orderBy, limit }) => {
+                    // Only listen to active orders (received/preparing/ready) to save reads
+                    const q = query(collection(firestore, 'orders'), where('status', 'in', ['received', 'preparing', 'ready']), orderBy('createdAt', 'desc'), limit(100));
                     unsubscribe = onSnapshot(q, (snapshot) => {
                         const orders = [];
                         snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
@@ -450,8 +465,9 @@ export const db = {
         listen(callback) {
             if (firebaseInitialized) {
                 let unsubscribe = null;
-                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
-                    const q = query(collection(firestore, 'sessions'), orderBy('createdAt', 'desc'), limit(250));
+                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, where, orderBy, limit }) => {
+                    // Only listen to OPEN sessions to minimize reads (was: all 250 recent)
+                    const q = query(collection(firestore, 'sessions'), where('status', '==', 'open'), orderBy('createdAt', 'desc'), limit(50));
                     unsubscribe = onSnapshot(q, (snapshot) => {
                         const sessions = [];
                         snapshot.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
