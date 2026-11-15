@@ -1,4 +1,4 @@
-import db, { cleanPhoneNumber, safeStorage } from './db.js?v=43';
+import db, { cleanPhoneNumber, safeStorage } from './db.js?v=44';
 import soundEffects from './audio.js';
 import { defaultCategories, defaultProducts } from './menu-data.js';
 
@@ -7,6 +7,7 @@ let tableNumber = null;
 let activeSession = null;
 let activeOrdersListener = null;
 let activeSessionListener = null;
+let cachedSessionOrders = null; // In-memory cache for session orders to save Firestore reads
 let menuProducts = [];
 let menuCategories = [];
 let currentCategory = 'all';
@@ -576,6 +577,7 @@ function handleSessionUpdate(session) {
         
         // Reset local session state
         activeSession = null;
+        cachedSessionOrders = null;
         cart = {};
         updateCartUI();
         elements.liveOrderTracker.style.display = 'none';
@@ -1165,9 +1167,12 @@ async function renderCartDrawerList() {
 
     elements.drawerTax.innerText = `₹${tax}`;
     
-    // Display running bill details if session exists dynamically
+    // Display running bill details if session exists dynamically (using cached orders to prevent read spikes)
     if (activeSession) {
-        const sessionOrders = await db.orders.getBySession(activeSession.id);
+        if (!cachedSessionOrders) {
+            cachedSessionOrders = await db.orders.getBySession(activeSession.id);
+        }
+        const sessionOrders = cachedSessionOrders || [];
         const orders = sessionOrders.filter(o => o.status !== 'cancelled');
         let sessionDynamicTotal = 0;
         orders.forEach(o => {
@@ -1190,17 +1195,21 @@ async function renderCartDrawerList() {
     elements.drawerGrandTotal.innerText = `₹${grandTotal}`;
 }
 
-async function syncRunningBill() {
+async function syncRunningBill(forceRefresh = false) {
     const bottomContainer = document.getElementById('menuRunningBillContainer');
     const bottomItems = document.getElementById('menuRunningBillItems');
     
     if (!activeSession) {
+        cachedSessionOrders = null;
         elements.runningBillSection.style.display = 'none';
         if (bottomContainer) bottomContainer.style.display = 'none';
         return;
     }
     
-    const sessionOrders = await db.orders.getBySession(activeSession.id);
+    if (forceRefresh || !cachedSessionOrders) {
+        cachedSessionOrders = await db.orders.getBySession(activeSession.id);
+    }
+    const sessionOrders = cachedSessionOrders || [];
     const orders = sessionOrders.filter(o => o.status !== 'cancelled');
 
     if (orders.length === 0) {
@@ -1461,6 +1470,9 @@ async function handlePlaceOrder() {
         closeCartDrawer();
         renderMenu();
 
+        // Refresh cached session orders with the new order placed
+        syncRunningBill(true);
+
         // Listen for status changes on the placed order
         listenToOrderStatus(orderId);
     } catch (e) {
@@ -1546,8 +1558,11 @@ async function openBillSummaryModal() {
         locSpan.innerText = activeSession?.locationLabel || `Table ${tableNumber}`;
         dateSpan.innerText = new Date(activeSession?.createdAt || Date.now()).toLocaleDateString();
 
-        // Fetch all orders placed in this session
-        const sessionOrders = await db.orders.getBySession(activeSession.id);
+        // Fetch all orders placed in this session (use cache if available)
+        if (!cachedSessionOrders) {
+            cachedSessionOrders = await db.orders.getBySession(activeSession.id);
+        }
+        const sessionOrders = cachedSessionOrders || [];
         const orders = sessionOrders.filter(o => o.status !== 'cancelled');
 
         if (orders.length === 0) {
@@ -1617,8 +1632,11 @@ async function handleDigitalBillRequest() {
         const loc = activeSession?.locationLabel || ("Table " + tableNumber);
         await db.requests.add(tableNumber, 'bill_digital', loc);
         
-        // Fetch all orders placed in this session
-        const sessionOrders = await db.orders.getBySession(activeSession.id);
+        // Fetch all orders placed in this session (use cache if available)
+        if (!cachedSessionOrders) {
+            cachedSessionOrders = await db.orders.getBySession(activeSession.id);
+        }
+        const sessionOrders = cachedSessionOrders || [];
         const validSessionOrders = sessionOrders.filter(o => o.status !== 'cancelled');
         if (validSessionOrders.length === 0) return;
         generateInvoicePDF(activeSession, validSessionOrders);
