@@ -316,9 +316,8 @@ export const db = {
         listen(callback) {
             if (firebaseInitialized) {
                 let unsubscribe = null;
-                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, where, orderBy, limit }) => {
-                    // Only listen to active orders (received/preparing/ready) to save reads
-                    const q = query(collection(firestore, 'orders'), where('status', 'in', ['received', 'preparing', 'ready']), orderBy('createdAt', 'desc'), limit(100));
+                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
+                    const q = query(collection(firestore, 'orders'), orderBy('createdAt', 'desc'), limit(250));
                     unsubscribe = onSnapshot(q, (snapshot) => {
                         const orders = [];
                         snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
@@ -465,9 +464,8 @@ export const db = {
         listen(callback) {
             if (firebaseInitialized) {
                 let unsubscribe = null;
-                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, where, orderBy, limit }) => {
-                    // Only listen to OPEN sessions to minimize reads (was: all 250 recent)
-                    const q = query(collection(firestore, 'sessions'), where('status', '==', 'open'), orderBy('createdAt', 'desc'), limit(50));
+                import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js").then(({ collection, onSnapshot, query, orderBy, limit }) => {
+                    const q = query(collection(firestore, 'sessions'), orderBy('createdAt', 'desc'), limit(250));
                     unsubscribe = onSnapshot(q, (snapshot) => {
                         const sessions = [];
                         snapshot.forEach(doc => sessions.push({ id: doc.id, ...doc.data() }));
